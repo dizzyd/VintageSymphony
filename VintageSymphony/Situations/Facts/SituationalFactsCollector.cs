@@ -16,7 +16,7 @@ public class SituationalFactsCollector
 		public long Time;
 	}
 
-	private readonly string[] EnemyTypes = { "drifter", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
+	private readonly string[] EnemyTypes = { "drifter", "shiver", "bowtorn", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
 
 	private readonly AttributeStorage attributeStorage;
 	private EntityPlayer PlayerEntity => clientApi.World.Player.Entity;
@@ -84,6 +84,7 @@ public class SituationalFactsCollector
 		UpdateEnemyDistance();
 		UpdateRiftDistance();
 		UpdateSunLevel();
+		UpdateAlive();
 
 		return facts;
 	}
@@ -227,6 +228,11 @@ public class SituationalFactsCollector
 		facts.SunLevel = VintageSymphony.ClientMain.playerProperties.sunSlight;
 	}
 
+	private void UpdateAlive()
+	{
+		facts.Alive = VintageSymphony.ClientMain.EntityPlayer.Alive;
+	}
+	
 	private static bool IsBedBlock(Block? block)
 	{
 		return block?.Code.PathStartsWith("bed") ?? false;

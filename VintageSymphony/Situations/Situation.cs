@@ -39,4 +39,13 @@ public enum Situation
 	
 	[SituationData(aversions: new []{Cave})]
 	Calm,
+	
+	[SituationData(20f,
+		pauseAfterPlayback: true,
+		forcedPauseAfterPlayback: true,
+		breaksPause: true,
+		breaksJustStartedTracks: true,
+		smoothDecreasingCertainty: false,
+		smoothIncreasingCertainty: false)]
+	Dead,
 }

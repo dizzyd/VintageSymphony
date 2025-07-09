@@ -1,37 +1,43 @@
+using System.Diagnostics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.GameContent;
 
 namespace VintageSymphony;
 
 // ReSharper disable once UnusedType.Global
 public class ConsoleCommandSystem : ModSystem
 {
+	private ICoreClientAPI api;
 	public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
 
 	public override void StartClientSide(ICoreClientAPI api)
 	{
+		this.api = api;
 		base.StartClientSide(api);
+		api.ChatCommands.Create("music")
+			.WithDescription("Music related commands for Vintage Symphony.");
 		api.ChatCommands.Get("music")
 			.BeginSubCommand("next")
 			.WithDescription("Play the next track")
 			.HandleWith(NextTrack)
-			.EndSubCommand()
+			.EndSubCommand();
 			// --
-			.BeginSubCommand("info")
+		api.ChatCommands.Get("music").BeginSubCommand("info")
 			.WithDescription("Displays the currently playing track")
 			.HandleWith(OutputCurrentTrack)
-			.EndSubCommand()
+			.EndSubCommand();
 			// --
-			.BeginSubCommand("stop")
+		api.ChatCommands.Get("music").BeginSubCommand("stop")
 			.HandleWith(StopTrack)
-			.EndSubCommand()
+			.EndSubCommand();
 			// --
-			.BeginSubCommand("debug")
+		api.ChatCommands.Get("music").BeginSubCommand("debug")
 			.WithDescription("Toggle debug overlay")
 			.HandleWith(ToggleDebugOverlay)
-			.EndSubCommand()
+			.EndSubCommand();
 			// --
-			.BeginSubCommand("config")
+		api.ChatCommands.Get("music").BeginSubCommand("config")
 			.WithDescription("Toggle Vintage Symphony configuration")
 			.HandleWith(ToggleConfigurationDialog)
 			.EndSubCommand();
@@ -80,7 +86,20 @@ public class ConsoleCommandSystem : ModSystem
 		{
 			return TextCommandResult.Success("&gt; no track playing");
 		}
-
+		if (track.isCaveMusic)
+		{
+			return TextCommandResult.Success($"&gt; {track.Title}, Cave Music");
+		}
+		string track_position = "";
+		try 
+		{
+			track_position = track.PositionString;
+		}
+		catch (Exception e)
+		{
+			api.Logger.Error($"Tried to get track position for track {track.Title}, but failed! Error: {e}");
+			return TextCommandResult.Success($"&gt; {track.Title} [Track Position Not Available]");
+		}
 		return TextCommandResult.Success($"&gt; {track.Title} [{track.PositionString}]");
 	}
 

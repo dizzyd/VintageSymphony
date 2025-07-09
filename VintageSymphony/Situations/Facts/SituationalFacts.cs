@@ -21,4 +21,5 @@ public struct SituationalFacts
 	public float RiftDistance = float.PositiveInfinity;
 	public float SunLevel;
 	public const float SunLevelMax = 32f;
+	public bool Alive;
 }

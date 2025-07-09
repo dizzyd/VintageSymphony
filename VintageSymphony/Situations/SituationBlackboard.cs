@@ -23,7 +23,8 @@ public class SituationBlackboard
 		new IdleEvaluator(),
 		new AdventureEvaluator(),
 		new CaveEvaluator(),
-		new TemporalStormEvaluator()
+		new TemporalStormEvaluator(),
+		new DeathEvaluator()
 	});
 
 	private readonly SituationalFactsCollector situationalFactsCollector;

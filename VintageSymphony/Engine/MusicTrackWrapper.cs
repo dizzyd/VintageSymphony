@@ -27,6 +27,7 @@ public sealed class MusicTrackWrapper : MusicTrack
 		{
 			Location = DefaultAssetLocation;
 			Situation = SituationLibrary.GetSituationString(wrappedTrack);
+			isCaveMusic = true;
 			DisableCooldown = true;
 			MinSunlight = 0;
 		}
