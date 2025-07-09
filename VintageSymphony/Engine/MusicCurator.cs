@@ -157,7 +157,8 @@ public class MusicCurator
 			{
 				if (assessments[i].Situation == track.TrackSituations[j])
 				{
-					score += assessments[i].WeightedCertainty;
+					float factor = score > 0f ? .08f : 1f;
+					score += factor * assessments[i].WeightedCertainty;
 					break;
 				}
 			}
