@@ -111,22 +111,10 @@ public class Playback
 		
 		var filteredTracks = CurrentPlaylist.GetTracks(TrackFilterPredicate);
 		
-		var result = filteredTracks
-			.Where(track => !trackCooldownManager.IsOnCooldown(track))
-			.ForeachContinuous(track => track.BeginSort())
-			.OrderBy(_ => Random.Shared.Next())
-			.FirstOrDefault();
-		
-		// If no track found (all are on cooldown), try again ignoring cooldown
-		if (result == null)
-		{
-			result = filteredTracks
-				.ForeachContinuous(track => track.BeginSort())
-				.OrderBy(_ => Random.Shared.Next())
-				.FirstOrDefault();
-		}
-		
-		return result;
+		return SelectTrack(filteredTracks.Where(track => !trackCooldownManager.IsOnCooldown(track))) 
+					// If no track found (all are on cooldown), try again ignoring cooldown
+					?? SelectTrack(filteredTracks);
+
 	}
 
 	private bool TrackFilterPredicate(MusicTrack track)
@@ -136,6 +124,15 @@ public class Playback
 
 		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, getPlayerProperties(),
 			       climateCondition, playerPosition);
+	}
+
+	private MusicTrack? SelectTrack(IEnumerable<MusicTrack> tracks)
+	{
+		return tracks
+			.ForeachContinuous(track => track.BeginSort())
+			.OrderByDescending(track => track.Priority)
+			.ThenBy(_ => Random.Shared.Next())
+			.FirstOrDefault();
 	}
 
 	public void NextTrack()
