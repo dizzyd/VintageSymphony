@@ -21,6 +21,7 @@ public struct SituationalFacts
 	public const float EnemyDistanceMax = 50f;
 	public float RiftDistance = float.PositiveInfinity;
 	public float SunLevel;
+	public float DayLight;
 	public const float SunLevelMax = 32f;
 	public bool Alive;
 }

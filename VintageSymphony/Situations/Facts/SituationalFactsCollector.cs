@@ -83,7 +83,7 @@ public class SituationalFactsCollector
 		UpdateHoldingWeapon();
 		UpdateEnemyDistance();
 		UpdateRiftDistance();
-		UpdateSunLevel();
+		UpdateSunFacts();
 		UpdateAlive();
 
 		return facts;
@@ -219,9 +219,10 @@ public class SituationalFactsCollector
 		facts.RiftDistance = MathF.Sqrt(sqrDistance);
 	}
 
-	private void UpdateSunLevel()
+	private void UpdateSunFacts()
 	{
 		facts.SunLevel = VintageSymphony.ClientMain.playerProperties.sunSlight;
+		facts.DayLight = VintageSymphony.ClientMain.playerProperties.DayLight;
 	}
 
 	private void UpdateAlive()

@@ -41,6 +41,12 @@ public class MusicTrack : SurfaceMusicTrack
 	// Sunlight value is from in-game data.
 	[JsonProperty]
 	public float MaxSunlight = 32f;
+	
+	[JsonProperty]
+	public float MinDaylight = 0f;
+	
+	[JsonProperty]
+	public float MaxDaylight = 2f;
 
 	[JsonProperty]
 	public float Volume = 1f;

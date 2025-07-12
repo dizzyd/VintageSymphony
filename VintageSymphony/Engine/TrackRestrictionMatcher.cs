@@ -24,7 +24,8 @@ public class TrackRestrictionMatcher
                && IsBetween(conds.WorldGenTemperature, musicTrack.MinWorldGenTemperature, musicTrack.MaxWorldGenTemperature)
                && conds.Rainfall >= musicTrack.MinRainFall
                && IsBetween(conds.WorldgenRainfall, musicTrack.MinWorldGenRainfall, musicTrack.MaxWorldGenRainfall)
-               && IsBetween(props.sunSlight, (float)musicTrack.MinSunlight, musicTrack.MaxSunlight)
+               && IsBetween(props.sunSlight, musicTrack.MinSunlight, musicTrack.MaxSunlight)
+               && IsBetween(props.DayLight, musicTrack.MinDaylight, musicTrack.MaxDaylight)
                && props.DistanceToSpawnPoint >= musicTrack.DistanceToSpawnPoint;
     }
 
