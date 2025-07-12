@@ -12,14 +12,15 @@ public class DangerEvaluator : IEvaluator
 
 	public float Evaluate(Situation situation, SituationalFacts facts)
 	{
-		float enemies = MoreMath.ClampMap(facts.EnemyDistance, 10, 40, 1, 0);
+		const float distanceThreshold = 25;
+		float enemies = MoreMath.ClampMap(facts.EnemyDistance, 5, distanceThreshold, 1, 0) * 0.7f
+		                + MoreMath.ClampMap(facts.VisibleEnemyDistance, 5, distanceThreshold, 1, 0) * 0.3f;
 		float rifts = MoreMath.ClampMap(facts.RiftDistance, 0, 40, 1, 0);
-		float holdingWeapon = facts.IsHoldingWeapon ? 1f : 0f;
 		float damage = MoreMath.ClampMap(facts.SecondsSinceLastDamage, 0, 60, 1, 0);
-		float damageWeight = damage >= 0.5f && facts.EnemyDistance < 15 ? 3f : 0.2f;
+		float damageWeight = damage >= 0.5f && facts.EnemyDistance < distanceThreshold ? 3f : 0.2f;
 
-		return enemies + MoreMath.WeightedAverage(
-			new Tuple<float, float>(holdingWeapon, 0.15f),
+		return MoreMath.WeightedAverage(
+			new Tuple<float, float>(enemies, 1.5f),
 			new Tuple<float, float>(rifts, 0.3f),
 			new Tuple<float, float>(damage, damageWeight)
 		);

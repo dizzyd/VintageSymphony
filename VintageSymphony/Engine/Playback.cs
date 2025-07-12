@@ -140,7 +140,7 @@ public class Playback
 
 	public void NextTrack()
 	{
-		StopTrack(0.5f);
+		StopTrack();
 		Pause.Stop();
 
 		var track = FindNextTrack();

@@ -22,7 +22,7 @@ public class MusicEngine : BaseModSystem
 
 	private SituationAssessor situationAssessor = null!;
 	private long situationUpdateEventId;
-	private const int SituationUpdateIntervalMs = 1 * 1000;
+	private const int SituationUpdateIntervalMs = 300;
 
 	public SituationAssessor SituationAssessor => situationAssessor;
 	private TrackedPlayerProperties PlayerProperties => VintageSymphony.ClientMain.playerProperties;

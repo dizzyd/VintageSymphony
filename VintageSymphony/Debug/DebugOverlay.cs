@@ -7,7 +7,7 @@ namespace VintageSymphony.Debug;
 #nullable disable
 public class DebugOverlay : HudElement
 {
-	private static readonly CairoFont Font = CairoFont.WhiteSmallishText().WithOrientation(EnumTextOrientation.Right);
+	private static readonly CairoFont Font = CairoFont.WhiteSmallText().WithOrientation(EnumTextOrientation.Right);
 	private const string DebugOverlayTextKey = "vsdbg_text";
 	private readonly MusicEngine musicEngine;
 	private GuiComposer debugTextComposer;
@@ -64,6 +64,7 @@ public class DebugOverlay : HudElement
 		sb.Append(nameof(facts.RelativeHeight)).Append(": ").AppendLine(facts.RelativeHeight.ToString("0.##"));
 		sb.Append(nameof(facts.DistanceToSurface)).Append(": ").AppendLine(facts.DistanceToSurface.ToString("0.##"));
 		sb.Append(nameof(facts.EnemyDistance)).Append(": ").AppendLine(facts.EnemyDistance.ToString("0.##"));
+		sb.Append(nameof(facts.VisibleEnemyDistance)).Append(": ").AppendLine(facts.VisibleEnemyDistance.ToString("0.##"));
 		sb.Append(nameof(facts.RiftDistance)).Append(": ").AppendLine(facts.RiftDistance.ToString("0.##"));
 		sb.Append(nameof(facts.SecondsSinceLastDamage)).Append(": ")
 			.AppendLine(facts.SecondsSinceLastDamage.ToString("0.##"));
@@ -73,7 +74,7 @@ public class DebugOverlay : HudElement
 		sb.AppendLine("---");
 		foreach (var assessment in musicEngine.SituationAssessor.Assessments.OrderByDescending(s => s.WeightedScore))
 		{
-			if (assessment.WeightedScore == 0)
+			if (assessment.WeightedScore < 0.01f)
 			{
 				sb.Append("<font color=\"0xAAAAAA99\">");
 			}
@@ -83,7 +84,7 @@ public class DebugOverlay : HudElement
 				.Append(assessment.Situation.ToString().PadLeft(15))
 				.Append(" (").Append(assessment.Score.ToString("0.00")).Append(")");
 			
-			if (assessment.WeightedScore == 0)
+			if (assessment.WeightedScore < 0.01f)
 			{
 				sb.Append("</font>");
 			}

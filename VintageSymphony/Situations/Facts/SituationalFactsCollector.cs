@@ -16,7 +16,7 @@ public class SituationalFactsCollector
 		public long Time;
 	}
 
-	private readonly string[] EnemyTypes = { "drifter", "shiver", "bowtorn", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
+	private static readonly string[] EnemyTypes = { "drifter", "shiver", "bowtorn", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
 
 	private readonly AttributeStorage attributeStorage;
 	private EntityPlayer PlayerEntity => clientApi.World.Player.Entity;
@@ -181,36 +181,32 @@ public class SituationalFactsCollector
 
 	private void UpdateEnemyDistance()
 	{
-		bool IsEnemy(Entity entity)
-		{
-			if (!entity.IsCreature || !entity.Alive)
-			{
-				return false;
-			}
-
-			for (int i = 0; i < EnemyTypes.Length; i++)
-			{
-				if (entity.Code.PathStartsWith(EnemyTypes[i]))
-				{
-					return true;
-				}
-			}
-
-			return false;
-		}
-
 		const float maxHorizontalDistance = SituationalFacts.EnemyDistanceMax;
 		const float maxVerticalDistance = 15;
+		
+		// find enemy closest to player
 		var enemyEntity = clientApi.World.GetNearestEntity(
 			PlayerEntity.Pos.XYZ,
 			maxHorizontalDistance,
 			maxVerticalDistance,
-			IsEnemy
+			IsEntityEnemy
 		);
-
+		
 		facts.EnemyDistance = enemyEntity == null
 			? float.PositiveInfinity
 			: MoreMath.DistanceWithWeightedVerticality(enemyEntity.Pos.XYZFloat, PlayerEntity.Pos.XYZFloat, 3f);
+
+		// find enemy closest to player
+		var visibleEnemyEntity = clientApi.World.GetNearestEntity(
+			PlayerEntity.Pos.XYZ,
+			maxHorizontalDistance,
+			maxVerticalDistance,
+			IsEntityVisibleEnemy
+		);
+		
+		facts.VisibleEnemyDistance = visibleEnemyEntity == null
+			? float.PositiveInfinity
+			: MoreMath.DistanceWithWeightedVerticality(visibleEnemyEntity.Pos.XYZFloat, PlayerEntity.Pos.XYZFloat, 3f);
 	}
 
 	private void UpdateRiftDistance()
@@ -236,5 +232,60 @@ public class SituationalFactsCollector
 	private static bool IsBedBlock(Block? block)
 	{
 		return block?.Code.PathStartsWith("bed") ?? false;
+	}
+	
+	private bool IsEntityEnemy(Entity entity)
+	{
+		if (!entity.IsCreature || !entity.Alive)
+		{
+			return false;
+		}
+
+		for (int i = 0; i < EnemyTypes.Length; i++)
+		{
+			if (entity.Code.PathStartsWith(EnemyTypes[i]))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+	
+	static BlockSelection raytraceIntersectionBlock = new();
+	static EntitySelection raytraceIntersectionEntity = new();
+	private bool IsEntityVisibleEnemy(Entity entity)
+	{
+		if (!IsEntityEnemy(entity))
+		{
+			return false;
+		}
+
+		var playerEyePos = PlayerEntity.Pos.XYZ + PlayerEntity.LocalEyePos;
+		clientApi.World.RayTraceForSelection(
+			playerEyePos, 
+			entity.Pos.XYZ, 
+			ref raytraceIntersectionBlock,
+			ref raytraceIntersectionEntity,
+			efilter: _ => false);
+
+		switch (raytraceIntersectionBlock?.Block?.BlockMaterial)
+		{
+			case EnumBlockMaterial.Stone:
+			case EnumBlockMaterial.Ore:
+			case EnumBlockMaterial.Metal:
+			case EnumBlockMaterial.Mantle:
+			case EnumBlockMaterial.Brick:
+			case EnumBlockMaterial.Ceramic:
+			case EnumBlockMaterial.Wood:
+			case EnumBlockMaterial.Soil:
+			case EnumBlockMaterial.Gravel:
+			case EnumBlockMaterial.Sand:
+			case EnumBlockMaterial.Snow:
+			case EnumBlockMaterial.Ice:
+				return false;
+			default:
+				return true;
+		}
 	}
 }
