@@ -74,17 +74,25 @@ public class DebugOverlay : HudElement
 		sb.AppendLine("---");
 		foreach (var assessment in musicEngine.SituationAssessor.Assessments.OrderByDescending(s => s.WeightedScore))
 		{
+			bool fontTag = false;
 			if (assessment.WeightedScore < 0.01f)
 			{
 				sb.Append("<font color=\"0xAAAAAA99\">");
+				fontTag = true;
+			}
+
+			if (musicEngine.Playback.CurrentPlaylist?.Situation == assessment.Situation)
+			{
+				sb.Append("<font color=\"0x38e314\">‣ ");
+				fontTag = true;
 			}
 			
-			sb.Append(assessment.WeightedScore.ToString("0.00"))
-				.Append(" ")
-				.Append(assessment.Situation.ToString().PadLeft(15))
-				.Append(" (").Append(assessment.Score.ToString("0.00")).Append(")");
+			sb.Append(assessment.Situation.ToString())
+				.Append(' ')
+				.Append(assessment.WeightedScore.ToString("0.00"))
+				.Append(" (").Append(assessment.Score.ToString("0.00")).Append(')');
 			
-			if (assessment.WeightedScore < 0.01f)
+			if (fontTag)
 			{
 				sb.Append("</font>");
 			}
@@ -96,11 +104,13 @@ public class DebugOverlay : HudElement
 		var track = musicEngine.CurrentMusicTrack;
 		if (track != null)
 		{
-			sb.Append(nameof(track)).Append(": ")
+			sb.Append("<font color=\"0x38e314\">‣ ")
 				.Append(track.Title)
-				.Append(" (")
+				.AppendLine("</font>");
+
+			sb.Append("<font size=\"14\" color=\"0xAAAAAA99\">[")
 				.Append(track.Situation)
-				.AppendLine(")");
+				.AppendLine("]</font>");
 		}
 		else
 		{
@@ -111,8 +121,8 @@ public class DebugOverlay : HudElement
 			{
 				duration = playback.Pause.GetRemainingTimeS();
 			}
-
-			sb.Append("Pause (").Append(duration).AppendLine("s)");
+			sb.Append("<font color=\"0xAAAAAA99\">")
+				.Append("• Pause (").Append(duration).AppendLine("s)</font>");
 		}
 
 		textElement.SetNewText(sb.ToString(), Font);
