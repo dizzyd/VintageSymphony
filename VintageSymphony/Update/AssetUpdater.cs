@@ -47,7 +47,7 @@ public class AssetUpdater : BaseModSystem
 	private void InterpretRelease(Release release)
 	{
 		var installedVersion = GetInstalledVersion();
-		if (release.Version == installedVersion)
+		if (installedVersion >= release.Version)
 		{
 			clientApi!.Logger.Notification($"{AssetModId} is up to date");
 			return;
