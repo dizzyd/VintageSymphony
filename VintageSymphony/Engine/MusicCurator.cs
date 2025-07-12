@@ -1,20 +1,21 @@
-using System.Runtime.CompilerServices;
 using Vintagestory.API.Client;
-using VintageSymphony.Debug;
+using Vintagestory.API.Common;
 using VintageSymphony.Situations;
+using VintageSymphony.Situations.Scoring;
 
 namespace VintageSymphony.Engine;
 
 public class MusicCurator
 {
 	private readonly ICoreClientAPI clientApi;
-	private readonly SituationBlackboard situationBlackboard;
-	private readonly Dictionary<Situation, List<ScoredMusicTrack>> tracksBySituation = new();
-	private readonly List<ScoredMusicTrack> allScoredTracks = new();
-	private readonly TrackRestrictionMatcher trackRestrictionMatcher;
-	private readonly TrackCooldownManager trackCooldownManager;
+	private readonly SituationAssessor situationAssessor;
+	private readonly Playback playback;
 
 	private List<MusicTrack> tracks = new();
+	private readonly Dictionary<Situation, Playlist> playlists = new();
+	public IList<SituationAssessment> Assessments => situationAssessor.Assessments;
+	private ILogger Logger => clientApi.Logger;
+
 
 	public List<MusicTrack> Tracks
 	{
@@ -22,159 +23,89 @@ public class MusicCurator
 		set
 		{
 			tracks = value;
-			InitializeTracks();
+			InitializePlaylists();
 		}
 	}
 
-	public MusicCurator(ICoreClientAPI clientApi, SituationBlackboard situationBlackboard,
-		TrackCooldownManager trackCooldownManager)
+	public MusicCurator(ICoreClientAPI clientApi, SituationAssessor situationAssessor, Playback playback)
 	{
+		this.situationAssessor = situationAssessor;
 		this.clientApi = clientApi;
-		this.situationBlackboard = situationBlackboard;
-		this.trackCooldownManager = trackCooldownManager;
-		trackRestrictionMatcher = new TrackRestrictionMatcher(clientApi.World.Calendar);
+		this.playback = playback;
+	}
 
+	private void InitializePlaylists()
+	{
+		playlists.Clear();
+
+		// Group tracks by situation
+		var tracksBySituation = new Dictionary<Situation, List<MusicTrack>>();
 		foreach (var situation in Enum.GetValues<Situation>())
 		{
-			tracksBySituation[situation] = new List<ScoredMusicTrack>();
+			tracksBySituation[situation] = new List<MusicTrack>();
+		}
+
+		// Assign tracks to their situations
+		foreach (var track in tracks)
+		{
+			foreach (var situation in track.TrackSituations)
+			{
+				tracksBySituation[situation].Add(track);
+			}
+		}
+
+		// Create playlists
+		foreach (var situation in Enum.GetValues<Situation>())
+		{
+			var situationTracks = tracksBySituation[situation];
+			if (situationTracks.Count > 0)
+			{
+				playlists[situation] = new Playlist(situation, situationTracks);
+			}
 		}
 	}
 
-	private void InitializeTracks()
+	public void Update(float dt)
 	{
-		allScoredTracks.Clear();
-		allScoredTracks.AddRange(tracks.Select(t => new ScoredMusicTrack(t)));
+		AutoSelectPlaylist();
+	}
 
-		foreach (var situationTracks in tracksBySituation)
+	private void AutoSelectPlaylist()
+	{
+		// Check if we need to switch to a better playlist for the current situation
+		var playlist = GetBestPlaylistForCurrentSituation();
+		if (playlist != null && playlist != playback.CurrentPlaylist)
 		{
-			situationTracks.Value.Clear();
-			situationTracks.Value.AddRange(allScoredTracks.Where(t =>
-				t.Track.TrackSituations.Contains(situationTracks.Key)));
+			Logger.Debug($"Switching to playlist: {playlist.Situation}");
+			playback.Play(playlist);
 		}
 	}
 
-	private bool ShouldReplaceCurrentTrack(MusicTrack track, IList<SituationAssessment> highestAssessments)
+	private IEnumerable<SituationAssessment> GetHighestAssessments()
 	{
-		var trackMatchesCurrentSituation = highestAssessments
-			.Select(a => a.Situation)
-			.Intersect(track.TrackSituations)
-			.Any();
-		if (!trackMatchesCurrentSituation)
+		const float certaintyFuzziness = 0.2f;
+
+		if (Assessments.Count == 0)
 		{
-			return true;
+			return Array.Empty<SituationAssessment>();
 		}
 
-		var highestPrioritizedTrackSituation = track.TrackSituations
-			.Max(s => SituationDataProvider.GetAttributes(s).Priority);
-		var highestSituationAssessment = highestAssessments
-			.Max(a => SituationDataProvider.GetAttributes(a.Situation).Priority);
-
-		return highestPrioritizedTrackSituation < highestSituationAssessment;
+		float highestCertainty = Assessments[0].WeightedScore;
+		float scoreThreshold = highestCertainty - certaintyFuzziness;
+		return Assessments
+			.TakeWhile(s => s.WeightedScore >= scoreThreshold);
 	}
 
-	public MusicTrack? GetReplacementTrack(MusicTrack currentTrack)
+	private Playlist? GetBestPlaylistForCurrentSituation()
 	{
-		var highestAssessments = GetHighestAssessments();
-		if (!ShouldReplaceCurrentTrack(currentTrack, highestAssessments))
+		foreach (var assessment in GetHighestAssessments())
 		{
-			return null;
-		}
-		
-		return FindBestMatchingTracks(highestAssessments)
-			.Select(st => st.Track)
-			.FirstOrDefault();
-	}
-
-	public MusicTrack? GetReplacementTrackForPause()
-	{
-		var highestAssessments = GetHighestAssessments();
-		if (highestAssessments.Any(a => SituationDataProvider.GetAttributes(a.Situation).BreaksPause))
-		{
-			return FindBestMatchingTracks(highestAssessments)
-				.Select(st => st.Track)
-				.FirstOrDefault();
+			if (playlists.TryGetValue(assessment.Situation, out var playlist))
+			{
+				return playlist;
+			}
 		}
 
 		return null;
-	}
-
-	public MusicTrack? FindBestMatchingTrack()
-	{
-		return FindBestMatchingTracks().FirstOrDefault();
-	}
-
-	public IEnumerable<MusicTrack> FindBestMatchingTracks()
-	{
-		return FindBestMatchingTracks(GetHighestAssessments())
-			.Select(t => t.Track);
-	}
-
-	private IEnumerable<ScoredMusicTrack> FindBestMatchingTracks(IList<SituationAssessment> highestAssessments)
-	{
-		var playerProperties = VintageSymphony.ClientMain.playerProperties;
-		var playerPosition = clientApi.World.Player.Entity.Pos.AsBlockPos;
-		var climateCondition = clientApi.World.BlockAccessor.GetClimateAt(playerPosition);
-
-		UpdateScoredTracks(highestAssessments);
-		return allScoredTracks
-			.Where(t => t.Score > 0f)
-			.Where(t => !trackCooldownManager.IsOnCooldown(t.Track))
-			.Where(t => trackRestrictionMatcher.IsWithinConfiguredRestrictions(t.Track, playerProperties,
-				climateCondition, playerPosition))
-			.OrderByDescending(GetTrackOrder);
-	}
-
-	private void UpdateScoredTracks(IList<SituationAssessment> assessments)
-	{
-		for (int i = 0; i < allScoredTracks.Count; i++)
-		{
-			CalculateTrackScore(allScoredTracks[i], assessments);
-			allScoredTracks[i].Track.BeginSort();
-		}
-	}
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private double GetTrackOrder(ScoredMusicTrack track)
-	{
-		const double m = 1000000.0;
-		const double m2 = m * m;
-		return track.Track.SituationPriority * m2
-		       + track.Track.Priority * m
-		       + track.Track.StartPriority * track.Score;
-	}
-
-	private void CalculateTrackScore(ScoredMusicTrack track, IList<SituationAssessment> assessments)
-	{
-		track.Score = CalculateTrackScore(track.Track, assessments);
-	}
-
-	private float CalculateTrackScore(MusicTrack track, IList<SituationAssessment> assessments)
-	{
-		float score = 0f;
-		for (int i = 0; i < assessments.Count; i++)
-		{
-			for (int j = 0; j < track.TrackSituations.Length; j++)
-			{
-				if (assessments[i].Situation == track.TrackSituations[j])
-				{
-					float factor = score > 0f ? .08f : 1f;
-					score += factor * assessments[i].WeightedCertainty;
-					break;
-				}
-			}
-		}
-		
-		return score;
-	}
-
-	private IList<SituationAssessment> GetHighestAssessments()
-	{
-		const float certaintyFuzziness = 0.2f;
-		float highestCertainty = situationBlackboard.Blackboard[0].WeightedCertainty;
-		IList<SituationAssessment> highestAssessments = situationBlackboard.Blackboard
-			.TakeWhile(s => s.WeightedCertainty >= highestCertainty - certaintyFuzziness)
-			.OrderByDescending(s => s.WeightedCertainty)
-			.ToList();
-		return highestAssessments;
 	}
 }

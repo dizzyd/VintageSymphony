@@ -13,10 +13,8 @@ using VintageSymphony.Storage;
 
 namespace VintageSymphony;
 
-// TODO: test compatibility with existing mods
 // TODO: allow mods to interact / extend?
 // TODO: take line of sight to enemies into account (danger, fight) 
-// TODO: Todos
 
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 public class VintageSymphony : BaseModSystem

@@ -7,10 +7,11 @@ namespace VintageSymphony.Debug;
 #nullable disable
 public class DebugOverlay : HudElement
 {
+	private static readonly CairoFont Font = CairoFont.WhiteSmallishText().WithOrientation(EnumTextOrientation.Right);
 	private const string DebugOverlayTextKey = "vsdbg_text";
 	private readonly MusicEngine musicEngine;
 	private GuiComposer debugTextComposer;
-	private GuiElementDynamicText textElement;
+	private GuiElementRichtext textElement;
 	private readonly StringBuilder sb = new(1024);
 
 	public DebugOverlay(ICoreClientAPI api, MusicEngine musicEngine)
@@ -25,15 +26,14 @@ public class DebugOverlay : HudElement
 		debugTextComposer = capi.Gui
 			.CreateCompo("debugScreenText",
 				ElementBounds.Percentual(EnumDialogArea.RightTop, 0.5, 0.7).WithFixedAlignmentOffset(-5.0, 5.0))
-			.AddDynamicText("", CairoFont.WhiteSmallishText().WithOrientation(EnumTextOrientation.Right),
-				ElementBounds.Fill, DebugOverlayTextKey).OnlyDynamic()
+			.AddRichtext("", Font, ElementBounds.Fill, DebugOverlayTextKey).OnlyDynamic()
 			.Compose();
-		textElement = debugTextComposer.GetDynamicText(DebugOverlayTextKey);
+		textElement = debugTextComposer.GetRichtext(DebugOverlayTextKey);
 	}
 
 	public override void OnFinalizeFrame(float dt)
 	{
-		if (musicEngine.SituationBlackboard != null)
+		if (musicEngine.SituationAssessor != null)
 		{
 			UpdateText(dt);
 		}
@@ -51,7 +51,7 @@ public class DebugOverlay : HudElement
 		var playerPosition = VintageSymphony.ClientApi.World.Player.Entity.Pos.AsBlockPos;
 		var climateCondition = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(playerPosition);
 
-		var facts = musicEngine.SituationBlackboard.SituationalFacts;
+		var facts = musicEngine.SituationAssessor.SituationalFacts;
 
 		sb.Clear();
 		sb.Append(nameof(facts.DistanceTravelledTotal)).Append(": ")
@@ -71,10 +71,24 @@ public class DebugOverlay : HudElement
 		sb.Append(nameof(facts.SunLevel)).Append(": ").AppendLine(facts.SunLevel.ToString("0"));
 		sb.Append("Temperature: ").AppendLine(climateCondition.Temperature.ToString("0.##"));
 		sb.AppendLine("---");
-		foreach (var assessment in musicEngine.SituationBlackboard.Blackboard.OrderByDescending(s => s.Certainty))
+		foreach (var assessment in musicEngine.SituationAssessor.Assessments.OrderByDescending(s => s.WeightedScore))
 		{
-			sb.Append(assessment.Situation).Append(": ")
-				.AppendLine(assessment.Certainty.ToString("0.##"));
+			if (assessment.WeightedScore == 0)
+			{
+				sb.Append("<font color=\"0xAAAAAA99\">");
+			}
+			
+			sb.Append(assessment.WeightedScore.ToString("0.00"))
+				.Append(" ")
+				.Append(assessment.Situation.ToString().PadLeft(15))
+				.Append(" (").Append(assessment.Score.ToString("0.00")).Append(")");
+			
+			if (assessment.WeightedScore == 0)
+			{
+				sb.Append("</font>");
+			}
+
+			sb.AppendLine();
 		}
 
 		sb.AppendLine("---");
@@ -90,20 +104,16 @@ public class DebugOverlay : HudElement
 		else
 		{
 			int duration = 0;
-			if (musicEngine.ForcedPause.Active)
+			var playback = musicEngine.Playback;
+
+			if (playback.Pause.Active)
 			{
-				duration = musicEngine.ForcedPause.GetRemainingTimeS();
-				sb.Append("Forced ");
-			}
-			else if (musicEngine.Pause.Active)
-			{
-				duration = musicEngine.Pause.GetRemainingTimeS();
+				duration = playback.Pause.GetRemainingTimeS();
 			}
 
 			sb.Append("Pause (").Append(duration).AppendLine("s)");
 		}
 
-
-		textElement.SetNewTextAsync(sb.ToString());
+		textElement.SetNewText(sb.ToString(), Font);
 	}
 }

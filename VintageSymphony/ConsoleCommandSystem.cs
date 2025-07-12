@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.GameContent;
 
 namespace VintageSymphony;
 
@@ -22,21 +20,21 @@ public class ConsoleCommandSystem : ModSystem
 			.WithDescription("Play the next track")
 			.HandleWith(NextTrack)
 			.EndSubCommand();
-			// --
+		// --
 		api.ChatCommands.Get("music").BeginSubCommand("info")
 			.WithDescription("Displays the currently playing track")
 			.HandleWith(OutputCurrentTrack)
 			.EndSubCommand();
-			// --
+		// --
 		api.ChatCommands.Get("music").BeginSubCommand("stop")
 			.HandleWith(StopTrack)
 			.EndSubCommand();
-			// --
+		// --
 		api.ChatCommands.Get("music").BeginSubCommand("debug")
 			.WithDescription("Toggle debug overlay")
 			.HandleWith(ToggleDebugOverlay)
 			.EndSubCommand();
-			// --
+		// --
 		api.ChatCommands.Get("music").BeginSubCommand("config")
 			.WithDescription("Toggle Vintage Symphony configuration")
 			.HandleWith(ToggleConfigurationDialog)
@@ -75,7 +73,7 @@ public class ConsoleCommandSystem : ModSystem
 
 	private TextCommandResult StopTrack(TextCommandCallingArgs args)
 	{
-		VintageSymphony.MusicEngine?.StopTrackAndPause();
+		VintageSymphony.MusicEngine?.Playback.StopTrackAndPause();
 		return TextCommandResult.Success();
 	}
 
@@ -86,12 +84,14 @@ public class ConsoleCommandSystem : ModSystem
 		{
 			return TextCommandResult.Success("&gt; no track playing");
 		}
+
 		if (track.isCaveMusic)
 		{
 			return TextCommandResult.Success($"&gt; {track.Title}, Cave Music");
 		}
+
 		string track_position = "";
-		try 
+		try
 		{
 			track_position = track.PositionString;
 		}
@@ -100,6 +100,7 @@ public class ConsoleCommandSystem : ModSystem
 			api.Logger.Error($"Tried to get track position for track {track.Title}, but failed! Error: {e}");
 			return TextCommandResult.Success($"&gt; {track.Title} [Track Position Not Available]");
 		}
+
 		return TextCommandResult.Success($"&gt; {track.Title} [{track.PositionString}]");
 	}
 

@@ -4,11 +4,11 @@ using VintageSymphony.Situations.Evaluator;
 
 namespace VintageSymphony.Situations;
 
-public static class SituationDataProvider
+public static class SituationDataReader
 {
     private static readonly Dictionary<Situation, SituationDataAttribute> SituationData;
 
-    static SituationDataProvider()
+    static SituationDataReader()
     {
         SituationData = Enum.GetValues(typeof(Situation))
             .Cast<Situation>()

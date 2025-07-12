@@ -1,5 +1,3 @@
-using VintageSymphony.Situations.Evaluator;
-
 namespace VintageSymphony.Situations;
 
 public enum Situation
@@ -7,45 +5,42 @@ public enum Situation
 	[SituationData(10f)]
 	TemporalStorm,
 
-	[SituationData(2.0f, 
+	[SituationData(2.0f,
+		dynamicSituation: true,
+		playContinuous: true,
 		pauseAfterPlayback: true,
-		forcedPauseAfterPlayback: true,
-		breaksPause: true, 
-		breaksForcedPause: true,
-		breaksJustStartedTracks: true, 
-		smoothIncreasingCertainty: false)]
+		smoothIncreasingScore: false)]
 	Fight,
 
-	[SituationData(1.5f, 
+	[SituationData(1.5f,
+		dynamicSituation: true,
+		playContinuous: true,
 		pauseAfterPlayback: true,
-		forcedPauseAfterPlayback: true,
-		breaksPause: true,
-		breaksJustStartedTracks: true,
-		smoothIncreasingCertainty: false,
-		aversions: new []{Cave})]
+		smoothIncreasingScore: false,
+		aversions: new[] { Cave })]
 	Danger,
 
-	[SituationData(1.6f, 
+	[SituationData(
 		pauseAfterPlayback: true,
-		breaksPause: true, 
-		smoothDecreasingCertainty: false)]
+		smoothDecreasingScore: false)]
 	Cave,
 
-	[SituationData(weight: 1.2f, aversions: new []{Cave})]
+	[SituationData(weight: 1.2f,
+		aversions: new[] { Cave })]
 	Adventure,
-	
-	[SituationData(weight: 0.9f, aversions: new []{Cave})]
+
+	[SituationData(weight: 0.9f,
+		aversions: new[] { Cave })]
 	Idle,
-	
-	[SituationData(aversions: new []{Cave})]
+
+	[SituationData(aversions: new[] { Cave })]
 	Calm,
-	
+
 	[SituationData(20f,
+		dynamicSituation: true,
+		playContinuous: true,
 		pauseAfterPlayback: true,
-		forcedPauseAfterPlayback: true,
-		breaksPause: true,
-		breaksJustStartedTracks: true,
-		smoothDecreasingCertainty: false,
-		smoothIncreasingCertainty: false)]
+		smoothDecreasingScore: false,
+		smoothIncreasingScore: false)]
 	Dead,
 }
