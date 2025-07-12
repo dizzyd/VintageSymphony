@@ -13,9 +13,6 @@ using VintageSymphony.Storage;
 
 namespace VintageSymphony;
 
-// TODO: allow mods to interact / extend?
-// TODO: take line of sight to enemies into account (danger, fight) 
-
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 public class VintageSymphony : BaseModSystem
 {
