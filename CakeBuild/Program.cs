@@ -154,7 +154,9 @@ public sealed class PackageModTask : FrostingTask<BuildContext>
 		
 		context.CopyFiles($"{Program.SolutionDirectory}/Assets/music/*.ogg", musicAssetsPath);
 		context.CopyFiles($"{Program.SolutionDirectory}/Assets/music/musicconfig.json", musicAssetsPath);
+		context.CopyFiles($"{Program.SolutionDirectory}/Assets/music/musicconfig-readme.txt", musicAssetsPath);
 		context.CopyFile($"{Program.SolutionDirectory}/Assets/modinfo.json", $"{assetsBuildDir}/modinfo.json");
+		context.CopyFile($"{Program.SolutionDirectory}/Assets/attributions.txt", $"{assetsBuildDir}/attributions.txt");
 		context.Zip(assetsBuildDir, $"{releasePath}/{context.ModAssetsName}_{context.ModAssetsVersion}.zip");
 	}
 
