@@ -1,6 +1,7 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
 using VintageSymphony.Storage;
@@ -85,6 +86,7 @@ public class SituationalFactsCollector
 		UpdateRiftDistance();
 		UpdateSunFacts();
 		UpdateAlive();
+		UpdateResonators();
 
 		return facts;
 	}
@@ -228,6 +230,38 @@ public class SituationalFactsCollector
 	private void UpdateAlive()
 	{
 		facts.Alive = VintageSymphony.ClientMain.EntityPlayer.Alive;
+	}
+
+	private void UpdateResonators()
+	{
+		const int radius = SituationalFacts.PlayingResonatorDistanceMax;
+		var playerPos = PlayerEntity.Pos.AsBlockPos;
+		var blockAccessor = clientApi.World.GetLockFreeBlockAccessor();
+		facts.PlayingResonatorDistance = float.PositiveInfinity;
+		
+		blockAccessor.WalkBlocks(
+			playerPos.SubCopy(radius, radius, radius), 
+			playerPos.AddCopy(radius, radius, radius),
+			(block, x, y, z) => 
+			{
+				if (!block.Code.PathStartsWith("resonator"))
+				{
+					return;
+				}
+
+				var blockPos = new BlockPos(x, y, z);
+				var playing = blockAccessor.GetBlockEntity<BlockEntityResonator>(blockPos)?.IsPlaying ?? false;
+				if(!playing)
+				{
+					return;
+				}
+				
+				var distance = blockPos.DistanceTo(playerPos);
+				if (distance < facts.PlayingResonatorDistance)
+				{
+					facts.PlayingResonatorDistance = distance;
+				}
+			});
 	}
 	
 	private static bool IsBedBlock(Block? block)

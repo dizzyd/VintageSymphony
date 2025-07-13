@@ -91,7 +91,7 @@ public class Playback
 			return;
 		}
 
-		if (oldAttributes is {DynamicSituation: true})
+		if (IsPlayingTrack() && oldAttributes is {DynamicSituation: true})
 		{
 			StopTrackAndPause();
 			return;

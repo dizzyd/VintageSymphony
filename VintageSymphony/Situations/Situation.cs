@@ -44,4 +44,11 @@ public enum Situation
 		smoothDecreasingScore: false,
 		smoothIncreasingScore: false)]
 	Dead,
+	
+	[SituationData(2.0f,
+		dynamicSituation: true,
+		pauseAfterPlayback: true,
+		smoothIncreasingScore: false,
+		aversions: new[] { Fight })]
+	Silence,
 }

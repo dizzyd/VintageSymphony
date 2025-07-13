@@ -63,6 +63,9 @@ public class MusicCurator
 				playlists[situation] = new Playlist(situation, situationTracks);
 			}
 		}
+		
+		// create playlists without tracks 
+		playlists[Situation.Silence] = new Playlist(Situation.Silence, Enumerable.Empty<MusicTrack>() );
 	}
 
 	public void Update(float dt)

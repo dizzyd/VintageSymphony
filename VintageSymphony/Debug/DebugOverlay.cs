@@ -66,6 +66,7 @@ public class DebugOverlay : HudElement
 		sb.Append(nameof(facts.EnemyDistance)).Append(": ").AppendLine(facts.EnemyDistance.ToString("0.##"));
 		sb.Append(nameof(facts.VisibleEnemyDistance)).Append(": ").AppendLine(facts.VisibleEnemyDistance.ToString("0.##"));
 		sb.Append(nameof(facts.RiftDistance)).Append(": ").AppendLine(facts.RiftDistance.ToString("0.##"));
+		sb.Append(nameof(facts.PlayingResonatorDistance)).Append(": ").AppendLine(facts.PlayingResonatorDistance.ToString("0.##"));
 		sb.Append(nameof(facts.SecondsSinceLastDamage)).Append(": ")
 			.AppendLine(facts.SecondsSinceLastDamage.ToString("0.##"));
 		sb.Append(nameof(facts.IsHoldingWeapon)).Append(": ").AppendLine(facts.IsHoldingWeapon.ToString());
