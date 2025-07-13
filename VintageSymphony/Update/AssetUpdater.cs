@@ -6,7 +6,7 @@ namespace VintageSymphony.Update;
 public class AssetUpdater : BaseModSystem
 {
 	private const string ApiUrl = "https://api.github.com/repos/Dantoes/VintageSymphony-Assets-Release/releases";
-	private const string AssetModId = "vintage-symphony-assets";
+	private const string AssetModId = "vintagesymphonyassets";
 	
 	private readonly GitHubReleaseFetcher releaseFetcher = new();
 	private Task<Release?>? releaseFetcherTask;
