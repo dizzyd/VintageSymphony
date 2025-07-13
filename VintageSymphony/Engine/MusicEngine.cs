@@ -21,8 +21,9 @@ public class MusicEngine : BaseModSystem
 	private long trackCooldownCleanupEventId;
 
 	private SituationAssessor situationAssessor = null!;
-	private long situationUpdateEventId;
 	private const int SituationUpdateIntervalMs = 300;
+	private readonly CancellationTokenSource situationUpdateCancellationTokenSource = new ();
+	private CancellationToken SituationUpdateCancellationToken => situationUpdateCancellationTokenSource.Token;
 
 	public SituationAssessor SituationAssessor => situationAssessor;
 	private TrackedPlayerProperties PlayerProperties => VintageSymphony.ClientMain.playerProperties;
@@ -46,7 +47,7 @@ public class MusicEngine : BaseModSystem
 	{
 		situationAssessor = new SituationAssessor(VintageSymphony.Instance.AttributeStorage);
 		trackCooldownManager = new TrackCooldownManager(() => clientApi!.ElapsedMilliseconds);
-
+		
 		playback = new Playback(
 			Logger,
 			trackCooldownManager,
@@ -62,8 +63,8 @@ public class MusicEngine : BaseModSystem
 			clientApi!.World.RegisterGameTickListener(UpdatePlayback, PlaybackUpdateIntervalMs, PlaybackUpdateDelayMs);
 		trackCooldownCleanupEventId = clientApi.World.RegisterGameTickListener(
 			_ => trackCooldownManager.CleanupRoutine(), TrackCooldownCleanupIntervalMs, TrackCooldownCleanupIntervalMs);
-		situationUpdateEventId =
-			clientApi.World.RegisterGameTickListener(UpdateSituation, SituationUpdateIntervalMs + 20);
+		
+		TyronThreadPool.CreateDedicatedThread(UpdateSituation, "VintageSymphony-SituationUpdate").Start();
 	}
 
 	private void OnMusicLevelChanged(int volume)
@@ -81,9 +82,9 @@ public class MusicEngine : BaseModSystem
 			}
 		}
 
+		situationUpdateCancellationTokenSource.Cancel();
 		UnregisterTickListeners(playbackUpdateEventId);
 		UnregisterTickListeners(trackCooldownCleanupEventId);
-		UnregisterTickListeners(situationUpdateEventId);
 		base.Dispose();
 	}
 
@@ -97,17 +98,28 @@ public class MusicEngine : BaseModSystem
 
 		musicCurator.Update(dt);
 		playback.Update(dt);
-
-		if (!playback.CanPlayMusic())
-		{
-			return;
-		}
 	}
 
 
-	private void UpdateSituation(float dt)
+	private void UpdateSituation()
 	{
-		situationAssessor.Update(dt);
+		long lastUpdate = 0;
+		while (!SituationUpdateCancellationToken.IsCancellationRequested)
+		{
+			long now = clientApi?.InWorldEllapsedMilliseconds ?? 0;
+			situationAssessor.Update(now - lastUpdate);
+			lastUpdate = now;
+			
+			try
+			{
+				Task.Delay(TimeSpan.FromMilliseconds(SituationUpdateIntervalMs), SituationUpdateCancellationToken)
+					.Wait(SituationUpdateCancellationToken);
+			}
+			catch (OperationCanceledException)
+			{
+				break;
+			}
+		}
 	}
 
 	public void NextTrack()
