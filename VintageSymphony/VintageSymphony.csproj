@@ -14,6 +14,9 @@
         <Product>VintageSymphony</Product>
     </PropertyGroup>
     <ItemGroup>
+        <Reference Include="cairo-sharp">
+          <HintPath>$(VINTAGE_STORY)/Lib/cairo-sharp.dll</HintPath>
+        </Reference>
         <Reference Include="VintagestoryAPI">
             <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
             <Private>false</Private>
