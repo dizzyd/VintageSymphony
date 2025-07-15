@@ -22,9 +22,6 @@ public class Playback
 
 	public readonly Pause Pause;
 
-	private const int MinPlaybackTimeForSongReplacementMs = 8 * 1000;
-	private const int DisableTrackCooldownThresholdMs = 30 * 1000;
-
 	private static readonly float[][] PauseDurations =
 	{
 		new[] { 960f, 480f },
@@ -62,6 +59,9 @@ public class Playback
 	public void SetMusicFrequency(int frequency)
 	{
 		musicFrequency = frequency;
+		var cooldown = (long)(10 * PauseDurations[frequency][0] * 1000L);
+		trackCooldownManager.SetCooldownDuration(cooldown);
+
 		if (Pause.Active)
 		{
 			Pause.UpdateDuration(GetPauseDuration());
@@ -91,7 +91,7 @@ public class Playback
 			return;
 		}
 
-		if (IsPlayingTrack() && oldAttributes is {DynamicSituation: true})
+		if (IsPlayingTrack() && oldAttributes is { DynamicSituation: true })
 		{
 			StopTrackAndPause();
 			return;
@@ -108,13 +108,12 @@ public class Playback
 	{
 		if (CurrentPlaylist == null)
 			return null;
-		
-		var filteredTracks = CurrentPlaylist.GetTracks(TrackFilterPredicate);
-		
-		return SelectTrack(filteredTracks.Where(track => !trackCooldownManager.IsOnCooldown(track))) 
-					// If no track found (all are on cooldown), try again ignoring cooldown
-					?? SelectTrack(filteredTracks);
 
+		var filteredTracks = CurrentPlaylist.GetTracks(TrackFilterPredicate);
+
+		return SelectTrack(filteredTracks.Where(track => !trackCooldownManager.IsOnCooldown(track)))
+		       // If no track found (all are on cooldown), try again ignoring cooldown
+		       ?? SelectTrack(filteredTracks);
 	}
 
 	private bool TrackFilterPredicate(MusicTrack track)
@@ -123,7 +122,7 @@ public class Playback
 		var climateCondition = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(playerPosition);
 
 		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, getPlayerProperties(),
-			       climateCondition, playerPosition);
+			climateCondition, playerPosition);
 	}
 
 	private MusicTrack? SelectTrack(IEnumerable<MusicTrack> tracks)

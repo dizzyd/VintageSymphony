@@ -14,8 +14,8 @@ public class TrackCooldownManager
 		}
 	}
 
-	private const long TrackCooldownMs = 30L * 60L * 1000L;
-	private const long TrackCooldownVarianceMs = 4L * 60L * 1000L;
+	private long trackCooldownMs = 30L * 60L * 1000L;
+	private long trackCooldownVarianceMs = 4L * 60L * 1000L;
 	private readonly List<TrackCooldown> tracksOnCooldown = new();
 	private readonly Func<long> currentTimeMs;
 
@@ -24,9 +24,15 @@ public class TrackCooldownManager
 		this.currentTimeMs = currentTimeMs;
 	}
 
+	public void SetCooldownDuration(long cooldownMs, long cooldownVarianceMs = 0)
+	{
+		trackCooldownMs = cooldownMs;
+		trackCooldownVarianceMs = cooldownVarianceMs;
+	}
+
 	public void PutOnCooldown(MusicTrack musicTrack)
 	{
-		tracksOnCooldown.Add(new TrackCooldown(GetCooldownEndTime(), musicTrack));
+		tracksOnCooldown.Add(new TrackCooldown(GetCooldownEndTime(musicTrack), musicTrack));
 	}
 
 	public bool IsOnCooldown(MusicTrack musicTrack)
@@ -46,9 +52,12 @@ public class TrackCooldownManager
 		tracksOnCooldown.RemoveAll(t => t.Track == musicTrack);
 	}
 
-	private long GetCooldownEndTime()
+	private long GetCooldownEndTime(MusicTrack musicTrack)
 	{
-		var cooldownDuration = (long)(TrackCooldownMs + TrackCooldownVarianceMs * Random.Shared.NextSingle());
+		const double priorityTrackMultiplicator = 1.25;
+		double multiplicator = musicTrack.Priority > 1 ? priorityTrackMultiplicator : 1;
+		var cooldownDuration =
+			(long)((trackCooldownMs + trackCooldownVarianceMs * Random.Shared.NextSingle()) * multiplicator);
 		var cooldownUntil = currentTimeMs() + cooldownDuration;
 		return cooldownUntil;
 	}
