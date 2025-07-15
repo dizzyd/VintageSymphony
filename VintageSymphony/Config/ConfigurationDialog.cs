@@ -34,10 +34,9 @@ public class ConfigurationDialog : GuiDialog
 
 		const int width = 350;
 		const int height = 30;
-		var bounds1 = ElementBounds.Fixed(10, 25, width, height);
-		var bounds2 = ElementBounds.Fixed(10, 50, width, height);
+		
 		// Lastly, create the dialog
-		SingleComposer = capi.Gui.CreateCompo("myAwesomeDialog", dialogBounds)
+		SingleComposer = capi.Gui.CreateCompo("vintagesymphony_configuration", dialogBounds)
 			.AddShadedDialogBG(bgBounds)
 			.AddDialogTitleBar("Vintage Symphony configuration", OnTitleBarCloseClicked);
 		
