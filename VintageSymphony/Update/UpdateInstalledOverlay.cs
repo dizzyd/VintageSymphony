@@ -5,7 +5,7 @@ namespace VintageSymphony.Update;
 #nullable disable
 public class UpdateInstalledOverlay : HudElement
 {
-	private GuiComposer debugTextComposer;
+	private GuiComposer notificationComposer;
 	private GuiElementDynamicText textElement;
 	private string text = "Vintage Symphony assets updated. Reload your save-game to apply changes.";
 
@@ -17,22 +17,22 @@ public class UpdateInstalledOverlay : HudElement
 
 	private void SetupDialog()
 	{
-		debugTextComposer = capi.Gui
-			.CreateCompo("updateScreenText",
+		notificationComposer = capi.Gui
+			.CreateCompo("updateCompletedNotification",
 				ElementBounds.Percentual(EnumDialogArea.LeftTop, 1, 0.3).WithFixedAlignmentOffset(5.0, 5.0))
-			.AddDynamicText(text, CairoFont.WhiteSmallishText(),
-				ElementBounds.Fill, "updateScreenTextElem").OnlyDynamic()
+			.AddDynamicText(text, CairoFont.WhiteSmallText(),
+				ElementBounds.Fill, "updateCompletedText").OnlyDynamic()
 			.Compose();
-		textElement = debugTextComposer.GetDynamicText("updateScreenTextElem");
+		textElement = notificationComposer.GetDynamicText("updateCompletedText");
 	}
 
 	public override void OnFinalizeFrame(float dt)
 	{
-		debugTextComposer.PostRender(dt);
+		notificationComposer.PostRender(dt);
 	}
 
 	public override void OnRenderGUI(float deltaTime)
 	{
-		debugTextComposer.Render(deltaTime);
+		notificationComposer.Render(deltaTime);
 	}
 }
