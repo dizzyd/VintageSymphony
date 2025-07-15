@@ -58,14 +58,10 @@ public class MusicCurator
 		foreach (var situation in Enum.GetValues<Situation>())
 		{
 			var situationTracks = tracksBySituation[situation];
-			if (situationTracks.Count > 0)
-			{
-				playlists[situation] = new Playlist(situation, situationTracks);
-			}
+			var playlist = new Playlist(situation,
+				(situationTracks.Count > 0) ? situationTracks : Enumerable.Empty<MusicTrack>());
+			playlists[situation] = playlist;
 		}
-		
-		// create playlists without tracks 
-		playlists[Situation.Silence] = new Playlist(Situation.Silence, Enumerable.Empty<MusicTrack>() );
 	}
 
 	public void Update(float dt)
