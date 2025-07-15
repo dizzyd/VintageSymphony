@@ -1,4 +1,6 @@
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Vintagestory.API.Client;
 using VintageSymphony.Engine;
 
@@ -13,6 +15,8 @@ public class DebugOverlay : HudElement
 	private GuiComposer debugTextComposer;
 	private GuiElementRichtext textElement;
 	private readonly StringBuilder sb = new(1024);
+	private long updateEventId;
+	private const int UpdateIntervalMs = 200;
 
 	public DebugOverlay(ICoreClientAPI api, MusicEngine musicEngine)
 		: base(api)
@@ -29,15 +33,30 @@ public class DebugOverlay : HudElement
 			.AddRichtext("", Font, ElementBounds.Fill, DebugOverlayTextKey).OnlyDynamic()
 			.Compose();
 		textElement = debugTextComposer.GetRichtext(DebugOverlayTextKey);
+		
+		OnClosed += OnDialogClosed;
+		updateEventId = capi.World.RegisterGameTickListener(TriggerUpdateTask, UpdateIntervalMs);
 	}
-
-	public override void OnFinalizeFrame(float dt)
+	
+	private void TriggerUpdateTask(float deltaTime)
 	{
 		if (musicEngine.SituationAssessor != null)
 		{
-			UpdateText(dt);
+			Task.Run(UpdateText);
 		}
+	}
 
+	private void OnDialogClosed()
+	{
+		if (updateEventId != 0)
+		{
+			capi.World.UnregisterGameTickListener(updateEventId);
+			updateEventId = 0;
+		}
+	}
+	
+	public override void OnFinalizeFrame(float dt)
+	{
 		debugTextComposer.PostRender(dt);
 	}
 
@@ -46,7 +65,7 @@ public class DebugOverlay : HudElement
 		debugTextComposer.Render(deltaTime);
 	}
 
-	private void UpdateText(float deltaTime)
+	private void UpdateText()
 	{
 		var playerPosition = VintageSymphony.ClientApi.World.Player.Entity.Pos.AsBlockPos;
 		var climateCondition = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(playerPosition);
@@ -127,6 +146,6 @@ public class DebugOverlay : HudElement
 				.Append("• Pause (").Append(duration).AppendLine("s)</font>");
 		}
 
-		textElement.SetNewText(sb.ToString(), Font);
+		capi.Event.EnqueueMainThreadTask(() => textElement.SetNewText(sb.ToString(), Font), "DebugOverlayTextUpdate");
 	}
 }
