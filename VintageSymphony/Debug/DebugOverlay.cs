@@ -1,6 +1,4 @@
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Vintagestory.API.Client;
 using VintageSymphony.Engine;
 
@@ -33,11 +31,22 @@ public class DebugOverlay : HudElement
 			.AddRichtext("", Font, ElementBounds.Fill, DebugOverlayTextKey).OnlyDynamic()
 			.Compose();
 		textElement = debugTextComposer.GetRichtext(DebugOverlayTextKey);
-		
-		OnClosed += OnDialogClosed;
+	}
+
+	public override void OnGuiOpened()
+	{
 		updateEventId = capi.World.RegisterGameTickListener(TriggerUpdateTask, UpdateIntervalMs);
 	}
-	
+
+	public override void OnGuiClosed()
+	{
+		if (updateEventId != 0)
+		{
+			capi.World.UnregisterGameTickListener(updateEventId);
+			updateEventId = 0;
+		}	
+	}
+
 	private void TriggerUpdateTask(float deltaTime)
 	{
 		if (musicEngine.SituationAssessor != null)
@@ -46,15 +55,6 @@ public class DebugOverlay : HudElement
 		}
 	}
 
-	private void OnDialogClosed()
-	{
-		if (updateEventId != 0)
-		{
-			capi.World.UnregisterGameTickListener(updateEventId);
-			updateEventId = 0;
-		}
-	}
-	
 	public override void OnFinalizeFrame(float dt)
 	{
 		debugTextComposer.PostRender(dt);
@@ -146,6 +146,7 @@ public class DebugOverlay : HudElement
 				.Append("• Pause (").Append(duration).AppendLine("s)</font>");
 		}
 
-		capi.Event.EnqueueMainThreadTask(() => textElement.SetNewText(sb.ToString(), Font), "DebugOverlayTextUpdate");
+		var text = sb.ToString();
+		capi.Event.EnqueueMainThreadTask(() => textElement.SetNewText(text, Font), "DebugOverlayTextUpdate");
 	}
 }
