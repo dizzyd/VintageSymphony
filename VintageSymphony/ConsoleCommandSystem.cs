@@ -6,12 +6,10 @@ namespace VintageSymphony;
 // ReSharper disable once UnusedType.Global
 public class ConsoleCommandSystem : ModSystem
 {
-	private ICoreClientAPI api;
 	public override bool ShouldLoad(EnumAppSide forSide) => forSide == EnumAppSide.Client;
 
 	public override void StartClientSide(ICoreClientAPI api)
 	{
-		this.api = api;
 		base.StartClientSide(api);
 		api.ChatCommands.Create("music")
 			.WithDescription("Music related commands for Vintage Symphony.");
