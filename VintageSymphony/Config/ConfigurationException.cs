@@ -8,10 +8,6 @@ public class ConfigurationException : Exception
     {
     }
 
-    protected ConfigurationException(SerializationInfo info, StreamingContext context) : base(info, context)
-    {
-    }
-
     public ConfigurationException(string? message) : base(message)
     {
     }
