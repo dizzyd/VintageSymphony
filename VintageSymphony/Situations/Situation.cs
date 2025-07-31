@@ -30,7 +30,7 @@ public enum Situation
 		aversions: new[] { Cave, Danger, Dead })]
 	Adventure,
 
-	[SituationData(weight: 0.9f,
+	[SituationData(
 		aversions: new[] { Cave, Danger, Dead })]
 	Idle,
 
