@@ -278,7 +278,8 @@ public class SituationalFactsCollector
 
 		for (int i = 0; i < EnemyTypes.Length; i++)
 		{
-			if (entity.Code.PathStartsWith(EnemyTypes[i]))
+			if (entity.Code.PathStartsWith(EnemyTypes[i])
+			    && !entity.Code.Path.Contains("baby"))
 			{
 				return true;
 			}
