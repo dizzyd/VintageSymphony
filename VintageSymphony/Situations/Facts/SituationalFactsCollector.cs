@@ -20,6 +20,7 @@ public class SituationalFactsCollector
 	private static readonly string[] EnemyTypes = { "drifter", "shiver", "bowtorn", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
 
 	private readonly AttributeStorage attributeStorage;
+	private readonly IDictionary<AssetLocation, bool> enemyCodeCache = new Dictionary<AssetLocation, bool>();
 	private EntityPlayer PlayerEntity => clientApi.World.Player.Entity;
 
 	private SituationalFacts facts = new();
@@ -276,16 +277,24 @@ public class SituationalFactsCollector
 			return false;
 		}
 
+		if (enemyCodeCache.TryGetValue(entity.Code, out bool isEnemy))
+		{
+			return isEnemy;
+		}
+
+		isEnemy = false;
 		for (int i = 0; i < EnemyTypes.Length; i++)
 		{
 			if (entity.Code.PathStartsWith(EnemyTypes[i])
 			    && !entity.Code.Path.Contains("baby"))
 			{
-				return true;
+				isEnemy = true;
+				break;
 			}
 		}
 
-		return false;
+		enemyCodeCache[entity.Code] = isEnemy;
+		return isEnemy;
 	}
 	
 	static BlockSelection raytraceIntersectionBlock = new();
