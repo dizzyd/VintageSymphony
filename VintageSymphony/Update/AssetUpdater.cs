@@ -7,7 +7,7 @@ public class AssetUpdater : BaseModSystem
 {
 	private const string ApiUrl = "https://api.github.com/repos/Dantoes/VintageSymphony-Assets-Release/releases";
 	private const string AssetModId = "vintagesymphonyassets";
-	
+
 	private readonly GitHubReleaseFetcher releaseFetcher = new();
 	private Task<Release?>? releaseFetcherTask;
 	private Task? upgradeTask;
@@ -39,14 +39,15 @@ public class AssetUpdater : BaseModSystem
 		{
 			return;
 		}
-		
+
 		clientApi!.World.UnregisterGameTickListener(releaseFetcherListener);
-		var release = releaseFetcherTask.Result;
+		var release = releaseFetcherTask?.Result;
 		if (release == null)
 		{
 			clientApi.Logger.Error($"Failed to get {AssetModId} release information from GitHub");
 			return;
 		}
+
 		InterpretRelease(release);
 	}
 
@@ -58,17 +59,17 @@ public class AssetUpdater : BaseModSystem
 			clientApi!.Logger.Notification($"{AssetModId} is up to date");
 			return;
 		}
-		
+
 		clientApi!.Logger.Notification($"Updating {AssetModId} to version {release.Version}…");
-		
+
 		// Show progress overlay and start update
 		isDownloading = true;
 		downloadProgress = 0f;
 		progressOverlay!.TryOpen();
-		
+
 		// Register listener to update progress UI
 		progressUpdateListener = clientApi.World.RegisterGameTickListener(UpdateProgressUI, 50, 0);
-		
+
 		// Start upgrade task
 		upgradeTask = UpgradeToRelease(release, installedVersion != null);
 		upgradeListener = clientApi.World.RegisterGameTickListener(CheckUpgradeProgress, 1000, 1000);
@@ -82,7 +83,7 @@ public class AssetUpdater : BaseModSystem
 			progressOverlay!.TryClose();
 			return;
 		}
-		
+
 		progressOverlay!.UpdateProgress(downloadProgress);
 	}
 
@@ -92,13 +93,13 @@ public class AssetUpdater : BaseModSystem
 		{
 			return;
 		}
-		
+
 		clientApi!.World.UnregisterGameTickListener(upgradeListener);
-		
+
 		// Download complete, clean up
 		isDownloading = false;
 		progressOverlay!.TryClose();
-		
+
 		// Show completion notification
 		updateOverlay!.TryOpen();
 		showOverlayListener = clientApi!.World.RegisterGameTickListener(CloseUpdateOverlay, 1000, 60000);
@@ -108,7 +109,7 @@ public class AssetUpdater : BaseModSystem
 	{
 		string modsPath = Path.Combine(clientApi!.DataBasePath, "Mods");
 		string[] obsoleteModFiles = Directory.GetFiles(modsPath, $"{AssetModId}*");
-		
+
 		await DownloadReleaseWithProgressAsync(release);
 
 		if (!deleteObsoleteFiles)
@@ -128,7 +129,7 @@ public class AssetUpdater : BaseModSystem
 			}
 		}
 	}
-	
+
 	private async Task DownloadReleaseWithProgressAsync(Release release)
 	{
 		try
@@ -136,11 +137,12 @@ public class AssetUpdater : BaseModSystem
 			using HttpClient client = new HttpClient();
 			string filePath = Path.Combine(clientApi!.DataBasePath, "Mods", release.FileName);
 			downloadCancellationSource = new CancellationTokenSource();
-			
+
 			// Get file size first to track progress
-			var response = await client.GetAsync(release.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, downloadCancellationSource.Token);
+			var response = await client.GetAsync(release.DownloadUrl, HttpCompletionOption.ResponseHeadersRead,
+				downloadCancellationSource.Token);
 			var totalBytes = response.Content.Headers.ContentLength ?? 0;
-			
+
 			if (totalBytes == 0)
 			{
 				// Fall back to simple download if we can't get the file size
@@ -150,12 +152,13 @@ public class AssetUpdater : BaseModSystem
 			}
 
 			await using var stream = await response.Content.ReadAsStreamAsync(downloadCancellationSource.Token);
-			await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-			
+			await using var fileStream =
+				new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+
 			var buffer = new byte[8192];
 			var bytesRead = 0;
 			var totalBytesRead = 0L;
-			
+
 			while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, downloadCancellationSource.Token)) > 0)
 			{
 				await fileStream.WriteAsync(buffer, 0, bytesRead, downloadCancellationSource.Token);

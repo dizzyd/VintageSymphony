@@ -5,11 +5,12 @@ public struct SituationalFacts
 	public SituationalFacts()
 	{
 	}
-	
+
 	public float DistanceTravelledTotal;
 	public float DistanceTravelledDiagonal;
 	public float MovementRadius;
-	public int SecondsSinceLastDamage = Int32.MaxValue;
+	public float SecondsSinceLastDamage = float.PositiveInfinity;
+	public float SecondsSinceLastAttack = float.PositiveInfinity;
 	public float DistanceFromHome;
 	public float Time;
 	public long Now;

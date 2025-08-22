@@ -1,7 +1,6 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
-using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
 using VintageSymphony.Storage;
@@ -17,7 +16,8 @@ public class SituationalFactsCollector
 		public long Time;
 	}
 
-	private static readonly string[] EnemyTypes = { "drifter", "shiver", "bowtorn", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
+	private static readonly string[] EnemyTypes =
+		{ "drifter", "shiver", "bowtorn", "locust", "wolf", "bear", "hyena", "bell", "eidolon" };
 
 	private readonly AttributeStorage attributeStorage;
 	private readonly IDictionary<AssetLocation, bool> enemyCodeCache = new Dictionary<AssetLocation, bool>();
@@ -38,6 +38,11 @@ public class SituationalFactsCollector
 
 	private ICoreClientAPI clientApi;
 	private long timeLastDamageTaken = -1L;
+	private long timeLastAttackDetected = -1L;
+
+	private const int
+		AttackCooldownSeconds = 2; // Time in seconds that isAttacked remains true after enemies stop attacking
+
 	private readonly int worldHeight;
 	private readonly int seaLevel;
 	private readonly ModSystemRifts riftModSystem;
@@ -74,7 +79,6 @@ public class SituationalFactsCollector
 		facts.SecondsSinceLastDamage = 0;
 	}
 
-
 	public SituationalFacts GatherFacts(float dt)
 	{
 		UpdateMovementDistances();
@@ -83,7 +87,11 @@ public class SituationalFactsCollector
 		UpdateTime();
 		UpdateHeight();
 		UpdateHoldingWeapon();
-		UpdateEnemyDistance();
+
+		var nearbyEnemies = FetchNearbyEnemies();
+		UpdateEnemyDistance(nearbyEnemies);
+		UpdateIsAttacked(nearbyEnemies);
+
 		UpdateRiftDistance();
 		UpdateSunFacts();
 		UpdateAlive();
@@ -169,8 +177,8 @@ public class SituationalFactsCollector
 		facts.Time = calendar.HourOfDay / calendar.HoursPerDay;
 		facts.Now = GetNow();
 		facts.SecondsSinceLastDamage = timeLastDamageTaken > 0
-			? (int)(facts.Now - timeLastDamageTaken) / 1000
-			: int.MaxValue;
+			? (float)(facts.Now - timeLastDamageTaken) / 1000L
+			: float.PositiveInfinity;
 	}
 
 	private void UpdateHeight()
@@ -182,34 +190,125 @@ public class SituationalFactsCollector
 		facts.DistanceToSurface = terrainHeight - playerHeight;
 	}
 
-	private void UpdateEnemyDistance()
+	private Entity[] FetchNearbyEnemies()
 	{
 		const float maxHorizontalDistance = SituationalFacts.EnemyDistanceMax;
 		const float maxVerticalDistance = 15;
-		
-		// find enemy closest to player
-		var enemyEntity = clientApi.World.GetNearestEntity(
+
+		return clientApi.World.GetEntitiesAround(
 			PlayerEntity.Pos.XYZ,
 			maxHorizontalDistance,
 			maxVerticalDistance,
 			IsEntityEnemy
 		);
-		
-		facts.EnemyDistance = enemyEntity == null
-			? float.PositiveInfinity
-			: MoreMath.DistanceWithWeightedVerticality(enemyEntity.Pos.XYZFloat, PlayerEntity.Pos.XYZFloat, 3f);
+	}
 
-		// find enemy closest to player
-		var visibleEnemyEntity = clientApi.World.GetNearestEntity(
-			PlayerEntity.Pos.XYZ,
-			maxHorizontalDistance,
-			maxVerticalDistance,
-			IsEntityVisibleEnemy
-		);
-		
-		facts.VisibleEnemyDistance = visibleEnemyEntity == null
-			? float.PositiveInfinity
-			: MoreMath.DistanceWithWeightedVerticality(visibleEnemyEntity.Pos.XYZFloat, PlayerEntity.Pos.XYZFloat, 3f);
+	private void UpdateEnemyDistance(Entity[] nearbyEnemies)
+	{
+		var playerPos = PlayerEntity.Pos.XYZFloat;
+
+		float closestDistance = float.PositiveInfinity;
+		float closestVisibleDistance = float.PositiveInfinity;
+
+		foreach (var entity in nearbyEnemies)
+		{
+			float distance = MoreMath.DistanceWithWeightedVerticality(entity.Pos.XYZFloat, playerPos, 3f);
+			if (distance < closestDistance)
+			{
+				closestDistance = distance;
+			}
+
+			if (!IsEntityVisible(entity))
+			{
+				continue;
+			}
+
+			if (distance < closestVisibleDistance)
+			{
+				closestVisibleDistance = distance;
+			}
+		}
+
+		facts.EnemyDistance = closestDistance;
+		facts.VisibleEnemyDistance = closestVisibleDistance;
+	}
+
+	private bool IsEntityVisible(Entity entity)
+	{
+		var playerEyePos = PlayerEntity.Pos.XYZ + PlayerEntity.LocalEyePos;
+		clientApi.World.RayTraceForSelection(
+			playerEyePos,
+			entity.Pos.XYZ,
+			ref raytraceIntersectionBlock,
+			ref raytraceIntersectionEntity,
+			efilter: _ => false);
+
+		switch (raytraceIntersectionBlock?.Block?.BlockMaterial)
+		{
+			case EnumBlockMaterial.Stone:
+			case EnumBlockMaterial.Ore:
+			case EnumBlockMaterial.Metal:
+			case EnumBlockMaterial.Mantle:
+			case EnumBlockMaterial.Brick:
+			case EnumBlockMaterial.Ceramic:
+			case EnumBlockMaterial.Wood:
+			case EnumBlockMaterial.Soil:
+			case EnumBlockMaterial.Gravel:
+			case EnumBlockMaterial.Sand:
+			case EnumBlockMaterial.Snow:
+			case EnumBlockMaterial.Ice:
+				return false;
+			default:
+				return true;
+		}
+	}
+
+	private void UpdateIsAttacked(Entity[] nearbyEnemies)
+	{
+		bool isCurrentlyAttacked = false;
+		var playerPos = PlayerEntity.Pos.XYZ;
+
+		// Use the already fetched nearby entities
+		foreach (var entity in nearbyEnemies)
+		{
+			// Check if entity is attacking (animation check)
+			var attackAnimation = entity.AnimManager?.IsAnimationActive("attack") ?? false;
+			var hurtAnimation = entity.AnimManager?.IsAnimationActive("hurt") ?? false;
+			var runAnimation = entity.AnimManager?.IsAnimationActive("run") ?? false;
+
+			// Check if entity is moving toward player
+			var entityToPlayerVec = playerPos.SubCopy(entity.Pos.XYZ);
+			entityToPlayerVec.Y = 0; // Ignore height difference for direction check
+			entityToPlayerVec = entityToPlayerVec.Normalize();
+
+			var entityMovementVec = entity.ServerPos.Motion.Clone();
+			entityMovementVec.Y = 0; // Ignore vertical motion
+
+			var movingTowardPlayer = false;
+			if (entityMovementVec.Length() > 0.01) // Entity is moving
+			{
+				entityMovementVec = entityMovementVec.Normalize();
+				var dot = entityMovementVec.Dot(entityToPlayerVec);
+				movingTowardPlayer = dot > 0.3; // Entity is generally moving toward player
+			}
+
+			// Entity is considered attacking if:
+			// 1. It's in attack animation, OR
+			// 2. It's running toward the player (walk animations excluded per request)
+			if (attackAnimation || hurtAnimation || (movingTowardPlayer && runAnimation))
+			{
+				isCurrentlyAttacked = true;
+				break;
+			}
+		}
+
+		long now = GetNow();
+		if (isCurrentlyAttacked)
+		{
+			timeLastAttackDetected = now;
+		}
+
+		facts.SecondsSinceLastAttack = (float)(now - timeLastAttackDetected) / 1000L;
 	}
 
 	private void UpdateRiftDistance()
@@ -239,11 +338,11 @@ public class SituationalFactsCollector
 		var playerPos = PlayerEntity.Pos.AsBlockPos;
 		var blockAccessor = clientApi.World.GetLockFreeBlockAccessor();
 		facts.PlayingResonatorDistance = float.PositiveInfinity;
-		
+
 		blockAccessor.WalkBlocks(
-			playerPos.SubCopy(radius, radius, radius), 
+			playerPos.SubCopy(radius, radius, radius),
 			playerPos.AddCopy(radius, radius, radius),
-			(block, x, y, z) => 
+			(block, x, y, z) =>
 			{
 				if (!block.Code.PathStartsWith("resonator"))
 				{
@@ -252,11 +351,11 @@ public class SituationalFactsCollector
 
 				var blockPos = new BlockPos(x, y, z);
 				var playing = blockAccessor.GetBlockEntity<BlockEntityResonator>(blockPos)?.IsPlaying ?? false;
-				if(!playing)
+				if (!playing)
 				{
 					return;
 				}
-				
+
 				var distance = blockPos.DistanceTo(playerPos);
 				if (distance < facts.PlayingResonatorDistance)
 				{
@@ -264,14 +363,15 @@ public class SituationalFactsCollector
 				}
 			});
 	}
-	
+
 	private static bool IsBedBlock(Block? block)
 	{
 		return block?.Code.PathStartsWith("bed") ?? false;
 	}
-	
+
 	private bool IsEntityEnemy(Entity entity)
 	{
+		
 		if (!entity.IsCreature || !entity.Alive)
 		{
 			return false;
@@ -296,41 +396,7 @@ public class SituationalFactsCollector
 		enemyCodeCache[entity.Code] = isEnemy;
 		return isEnemy;
 	}
-	
+
 	static BlockSelection raytraceIntersectionBlock = new();
 	static EntitySelection raytraceIntersectionEntity = new();
-	private bool IsEntityVisibleEnemy(Entity entity)
-	{
-		if (!IsEntityEnemy(entity))
-		{
-			return false;
-		}
-
-		var playerEyePos = PlayerEntity.Pos.XYZ + PlayerEntity.LocalEyePos;
-		clientApi.World.RayTraceForSelection(
-			playerEyePos, 
-			entity.Pos.XYZ, 
-			ref raytraceIntersectionBlock,
-			ref raytraceIntersectionEntity,
-			efilter: _ => false);
-
-		switch (raytraceIntersectionBlock?.Block?.BlockMaterial)
-		{
-			case EnumBlockMaterial.Stone:
-			case EnumBlockMaterial.Ore:
-			case EnumBlockMaterial.Metal:
-			case EnumBlockMaterial.Mantle:
-			case EnumBlockMaterial.Brick:
-			case EnumBlockMaterial.Ceramic:
-			case EnumBlockMaterial.Wood:
-			case EnumBlockMaterial.Soil:
-			case EnumBlockMaterial.Gravel:
-			case EnumBlockMaterial.Sand:
-			case EnumBlockMaterial.Snow:
-			case EnumBlockMaterial.Ice:
-				return false;
-			default:
-				return true;
-		}
-	}
 }

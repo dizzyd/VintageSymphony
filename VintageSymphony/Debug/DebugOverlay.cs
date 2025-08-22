@@ -89,6 +89,7 @@ public class DebugOverlay : HudElement
 		sb.Append(nameof(facts.SecondsSinceLastDamage)).Append(": ")
 			.AppendLine(facts.SecondsSinceLastDamage.ToString("0.##"));
 		sb.Append(nameof(facts.IsHoldingWeapon)).Append(": ").AppendLine(facts.IsHoldingWeapon.ToString());
+		sb.Append(nameof(facts.SecondsSinceLastAttack)).Append(": ").AppendLine(facts.SecondsSinceLastAttack.ToString());
 		sb.Append(nameof(facts.SunLevel)).Append(": ").AppendLine(facts.SunLevel.ToString("0"));
 		sb.Append(nameof(facts.DayLight)).Append(": ").AppendLine(facts.DayLight.ToString("0.##"));
 		sb.Append("Temperature: ").AppendLine(climateCondition.Temperature.ToString("0.##"));
