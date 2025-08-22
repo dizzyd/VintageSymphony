@@ -386,7 +386,8 @@ public class SituationalFactsCollector
 		for (int i = 0; i < EnemyTypes.Length; i++)
 		{
 			if (entity.Code.PathStartsWith(EnemyTypes[i])
-			    && !entity.Code.Path.Contains("baby"))
+			    && !entity.Code.Path.Contains("baby")
+			    && !entity.Code.Path.Contains("hacked"))
 			{
 				isEnemy = true;
 				break;
