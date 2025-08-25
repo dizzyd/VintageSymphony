@@ -235,31 +235,40 @@ public class SituationalFactsCollector
 
 	private bool IsEntityVisible(Entity entity)
 	{
-		var playerEyePos = PlayerEntity.Pos.XYZ + PlayerEntity.LocalEyePos;
-		clientApi.World.RayTraceForSelection(
-			playerEyePos,
-			entity.Pos.XYZ,
-			ref raytraceIntersectionBlock,
-			ref raytraceIntersectionEntity,
-			efilter: _ => false);
-
-		switch (raytraceIntersectionBlock?.Block?.BlockMaterial)
+		try
 		{
-			case EnumBlockMaterial.Stone:
-			case EnumBlockMaterial.Ore:
-			case EnumBlockMaterial.Metal:
-			case EnumBlockMaterial.Mantle:
-			case EnumBlockMaterial.Brick:
-			case EnumBlockMaterial.Ceramic:
-			case EnumBlockMaterial.Wood:
-			case EnumBlockMaterial.Soil:
-			case EnumBlockMaterial.Gravel:
-			case EnumBlockMaterial.Sand:
-			case EnumBlockMaterial.Snow:
-			case EnumBlockMaterial.Ice:
-				return false;
-			default:
-				return true;
+			var playerEyePos = PlayerEntity.Pos.XYZ + PlayerEntity.LocalEyePos;
+			clientApi.World.RayTraceForSelection(
+				playerEyePos,
+				entity.Pos.XYZ,
+				ref raytraceIntersectionBlock,
+				ref raytraceIntersectionEntity,
+				efilter: _ => false);
+
+			switch (raytraceIntersectionBlock?.Block?.BlockMaterial)
+			{
+				case EnumBlockMaterial.Stone:
+				case EnumBlockMaterial.Ore:
+				case EnumBlockMaterial.Metal:
+				case EnumBlockMaterial.Mantle:
+				case EnumBlockMaterial.Brick:
+				case EnumBlockMaterial.Ceramic:
+				case EnumBlockMaterial.Wood:
+				case EnumBlockMaterial.Soil:
+				case EnumBlockMaterial.Gravel:
+				case EnumBlockMaterial.Sand:
+				case EnumBlockMaterial.Snow:
+				case EnumBlockMaterial.Ice:
+					return false;
+				default:
+					return true;
+			}
+		}
+		catch (IndexOutOfRangeException)
+		{
+			// ignore
+			// workaround for https://github.com/anegostudios/VintageStory-Issues/issues/5126
+			return false;
 		}
 	}
 
