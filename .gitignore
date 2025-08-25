@@ -27,6 +27,7 @@ DebugTmp/
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
 .idea/**/dbnavigator.xml
+.idea/**/AndroidProjectSystem.xml
 
 # Gradle
 .idea/**/gradle.xml
