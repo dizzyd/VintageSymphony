@@ -1,3 +1,4 @@
+using System.Xml.Schema;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -353,7 +354,7 @@ public class SituationalFactsCollector
 			playerPos.AddCopy(radius, radius, radius),
 			(block, x, y, z) =>
 			{
-				if (!block.Code.PathStartsWith("resonator"))
+				if (!block?.Code?.PathStartsWith("resonator") ?? true)
 				{
 					return;
 				}
