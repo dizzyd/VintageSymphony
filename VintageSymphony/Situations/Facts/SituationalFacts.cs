@@ -22,7 +22,7 @@ public struct SituationalFacts
 	public const float EnemyDistanceMax = 50f;
 	public float RiftDistance = float.PositiveInfinity;
 	public float PlayingResonatorDistance = float.PositiveInfinity;
-	public const int PlayingResonatorDistanceMax = 14;
+	public const int PlayingResonatorDistanceMax = 18;
 	public float SunLevel;
 	public float DayLight;
 	public bool Alive;
