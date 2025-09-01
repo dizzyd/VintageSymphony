@@ -10,7 +10,7 @@ public enum Situation
 		playContinuous: true,
 		pauseAfterPlayback: true,
 		smoothIncreasingScore: false,
-		aversions: [Dead])]
+		aversions: new[] { Dead })]
 	Fight,
 
 	[SituationData(
@@ -18,7 +18,7 @@ public enum Situation
 		playContinuous: true,
 		pauseAfterPlayback: true,
 		smoothIncreasingScore: false,
-		aversions: [Dead])]
+		aversions: new[] { Dead })]
 	Danger,
 
 	[SituationData(
@@ -27,14 +27,14 @@ public enum Situation
 	Cave,
 
 	[SituationData(weight: 1.2f,
-		aversions: [Cave, Danger, Dead])]
+		aversions: new[] { Cave, Danger, Dead })]
 	Adventure,
 
 	[SituationData(
-		aversions: [Cave, Danger, Dead])]
+		aversions: new[] { Cave, Danger, Dead })]
 	Idle,
 
-	[SituationData(aversions: [Cave, Danger, Dead])]
+	[SituationData(aversions: new[] { Cave, Danger, Dead })]
 	Calm,
 
 	[SituationData(20f,
@@ -49,6 +49,6 @@ public enum Situation
 		dynamicSituation: true,
 		pauseAfterPlayback: true,
 		smoothIncreasingScore: false,
-		aversions: [Fight])]
+		aversions: new[] { Fight })]
 	Silence,
 }

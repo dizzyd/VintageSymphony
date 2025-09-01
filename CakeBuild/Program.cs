@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.Versioning;
 using Cake.Common;
 using Cake.Common.IO;
 using Cake.Common.Tools.DotNet;
@@ -53,23 +55,72 @@ public class BuildContext : FrostingContext
 	public string ModAssetsVersion { get; }
 	public string ModAssetsName { get; }
 	public bool SkipJsonValidation { get; set; }
+	public string TargetFramework { get; set; }
+
 
 	public BuildContext(ICakeContext context)
 		: base(context)
 	{
 		BuildConfiguration = context.Argument("configuration", "Release");
 		SkipJsonValidation = context.Argument("skipJsonValidation", false);
-		
+		TargetFramework = context.Argument("framework", DetectTargetFramework());
+
 		var modInfoPath = Path.Combine(Program.SolutionDirectory, ProjectName, "modinfo.json");
 		var modInfo = context.DeserializeJsonFromFile<ModInfo>(modInfoPath);
 		ModVersion = modInfo.Version;
 		ModName = modInfo.ModID;
-		
+
 		var modAssetsInfoPath = Path.Combine(Program.SolutionDirectory, "Assets", "modinfo.json");
 		var modAssetsInfo = context.DeserializeJsonFromFile<ModInfo>(modAssetsInfoPath);
 		ModAssetsVersion = modAssetsInfo.Version;
 		ModAssetsName = modAssetsInfo.ModID;
 	}
+	
+	private string DetectTargetFramework()
+	{
+		try
+		{
+			// Get the Vintage Story API path from environment variable
+			var vsPath = Environment.GetEnvironmentVariable("VINTAGE_STORY");
+			if (string.IsNullOrEmpty(vsPath))
+			{
+				Console.WriteLine("VINTAGE_STORY environment variable not set. Defaulting to net8.0");
+				return "net8.0";
+			}
+            
+			// Path to the main API DLL
+			var apiDllPath = Path.Combine(vsPath, "VintagestoryAPI.dll");
+			if (!File.Exists(apiDllPath))
+			{
+				Console.WriteLine($"VintagestoryAPI.dll not found at {apiDllPath}. Defaulting to net8.0");
+				return "net8.0";
+			}
+            
+			// Load the assembly and check its target framework
+			var assembly = Assembly.LoadFile(apiDllPath);
+			var targetFrameworkAttribute = assembly.GetCustomAttribute<TargetFrameworkAttribute>();
+            
+			if (targetFrameworkAttribute != null)
+			{
+				var frameworkName = targetFrameworkAttribute.FrameworkName;
+				Console.WriteLine($"Detected framework: {frameworkName}");
+                
+				if (frameworkName.Contains(".NETCoreApp,Version=v7."))
+					return "net7.0";
+				else if (frameworkName.Contains(".NETCoreApp,Version=v8."))
+					return "net8.0";
+			}
+            
+			// Fallback to checking assembly references for .NET version indicators
+			return "net8.0"; // Default to the latest if can't determine
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Error detecting framework: {ex.Message}");
+			return "net8.0"; // Default to the latest if detection fails
+		}
+	}
+
 }
 
 [TaskName("ValidateJson")]
@@ -118,7 +169,8 @@ public sealed class BuildTask : FrostingTask<BuildContext>
 		context.DotNetPublish(projectFile,
 			new DotNetPublishSettings
 			{
-				Configuration = context.BuildConfiguration
+				Configuration = context.BuildConfiguration,
+				Framework = context.TargetFramework
 			});
 	}
 }
@@ -130,13 +182,13 @@ public sealed class PackageModTask : FrostingTask<BuildContext>
 	public override void Run(BuildContext context)
 	{
 		var projectDir = Path.Combine(Program.SolutionDirectory, BuildContext.ProjectName);
-		
+
 		var releasePath = $"{Program.SolutionDirectory}/Releases";
-		context.EnsureDirectoryExists(releasePath);		
+		context.EnsureDirectoryExists(releasePath);
 
 		context.EnsureDirectoryExists("../Releases");
 		context.CleanDirectory("../Releases");
-		
+
 		var modBuildDir = $"../Releases/{context.ModName}";
 		PackageModArchive(context, modBuildDir, projectDir, releasePath);
 
@@ -151,7 +203,7 @@ public sealed class PackageModTask : FrostingTask<BuildContext>
 	{
 		var musicAssetsPath = $"{assetsBuildDir}/assets/{context.ModName}/music/";
 		context.EnsureDirectoryExists(musicAssetsPath);
-		
+
 		context.CopyFiles($"{Program.SolutionDirectory}/Assets/music/*.ogg", musicAssetsPath);
 		context.CopyFiles($"{Program.SolutionDirectory}/Assets/music/musicconfig.json", musicAssetsPath);
 		context.CopyFiles($"{Program.SolutionDirectory}/Assets/music/musicconfig-readme.txt", musicAssetsPath);
@@ -165,22 +217,21 @@ public sealed class PackageModTask : FrostingTask<BuildContext>
 		// Copy mod DLL
 		context.EnsureDirectoryExists(buildDir);
 		context.CopyFiles($"{projectDir}/bin/{context.BuildConfiguration}/{BuildContext.ProjectName}.dll", buildDir);
-		
+
 		// Copy mod debug symbols
 		if (context.BuildConfiguration == "Debug")
 		{
 			context.CopyFiles($"{projectDir}/bin/{context.BuildConfiguration}/{BuildContext.ProjectName}.pdb",
 				buildDir);
 		}
-		
+
 		// copy modinfo.json
 		context.CopyFile($"{projectDir}/modinfo.json", $"{buildDir}/modinfo.json");
-		
+
 		// package mod
 		context.Zip(buildDir, $"{releasePath}/{context.ModName}_{context.ModVersion}.zip");
 	}
 }
-
 
 [TaskName("Default")]
 [IsDependentOn(typeof(PackageModTask))]
