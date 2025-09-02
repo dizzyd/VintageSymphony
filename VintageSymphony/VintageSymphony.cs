@@ -69,8 +69,7 @@ public class VintageSymphony : BaseModSystem
 
 		// Initialize compatibility manager and load compatibility data
 		CompatibilityManager = new CompatibilityManager(ClientApi.Logger);
-		var compatibilityFilePath = Path.Combine(Mod.FileName, "compatibility.json");
-		CompatibilityManager.LoadCompatibilityData(compatibilityFilePath);
+		CompatibilityManager.LoadCompatibilityData(ClientApi, ModId);
 
 		if (!Harmony.HasAnyPatches(ModId))
 		{

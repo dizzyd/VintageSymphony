@@ -5,32 +5,7 @@ namespace VintageSymphony.Update;
 public class GitHubReleaseFetcher
 {
 	private static readonly HttpClient httpClient = new();
-
-	public async Task<Release?>? GetLatestReleaseAsync(string apiUrl)
-	{
-		try
-		{
-			httpClient.DefaultRequestHeaders.Add("User-Agent", "C# App");
-
-			HttpResponseMessage response = await httpClient.GetAsync(apiUrl);
-			response.EnsureSuccessStatusCode();
-			string content = await response.Content.ReadAsStringAsync();
-			JArray releases = JArray.Parse(content);
-
-			// Find the latest version by comparing tag_name
-			return releases
-				.Select(GetRelease)
-				.Where(release => release != null)
-				.MaxBy(release => release?.Version ?? null);
-		}
-		catch (Exception ex)
-		{
-			// Handle exceptions (e.g., network errors, JSON parsing errors)
-			Console.WriteLine($"An error occurred: {ex.Message}");
-			return null;
-		}
-	}
-
+	
 	public async Task<IEnumerable<Release>> GetAllReleasesAsync(string apiUrl)
 	{
 		try

@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 
 namespace VintageSymphony.Update;
@@ -13,17 +15,29 @@ public class CompatibilityManager
 		this.logger = logger;
 	}
 
-	public void LoadCompatibilityData(string filePath)
+	public void LoadCompatibilityData(ICoreClientAPI api, string modid)
 	{
 		try
 		{
-			if (!File.Exists(filePath))
+			var location = AssetLocation.Create($"{modid}:config/compatibility.json");
+			byte[]? data;
+			try
 			{
-				logger.Warning($"Compatibility file not found at {filePath}");
+				data = api.Assets.Get(location).Data;
+			}
+			catch (Exception ex)
+			{
+				logger.Warning($"Compatibility asset not found at {location}: {ex.Message}");
 				return;
 			}
 
-			string jsonContent = File.ReadAllText(filePath);
+			if (data == null || data.Length == 0)
+			{
+				logger.Warning($"Compatibility asset at {location} returned no data");
+				return;
+			}
+
+			string jsonContent = Encoding.UTF8.GetString(data);
 			using JsonDocument doc = JsonDocument.Parse(jsonContent);
 			
 			if (!doc.RootElement.TryGetProperty("assetCompatibility", out JsonElement assetCompatibility))
@@ -37,8 +51,8 @@ public class CompatibilityManager
 				string modId = modProperty.Name;
 				if (modProperty.Value.TryGetProperty("latestCompatibleVersion", out JsonElement versionElement))
 				{
-					string versionString = versionElement.GetString();
-					if (!string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out Version version))
+					string? versionString = versionElement.GetString();
+					if (!string.IsNullOrEmpty(versionString) && Version.TryParse(versionString, out Version? version))
 					{
 						compatibleVersions[modId] = version;
 						logger.Debug($"Loaded compatibility constraint for {modId}: {version}");
