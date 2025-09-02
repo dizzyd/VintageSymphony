@@ -7,6 +7,7 @@ using VintageSymphony.Config;
 using VintageSymphony.Debug;
 using VintageSymphony.Engine;
 using VintageSymphony.Storage;
+using VintageSymphony.Update;
 
 // ReSharper disable NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
 #pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
@@ -25,6 +26,7 @@ public class VintageSymphony : BaseModSystem
 	public static DebugOverlay DebugOverlay { get; private set; }
 	public static Configuration Configuration { get; private set; }
 	public static ConfigurationDialog ConfigurationDialog { get; private set; }
+	public static CompatibilityManager CompatibilityManager { get; private set; }
 
 	private string ModId => Mod.Info.ModID;
 	public AttributeStorage AttributeStorage { get; private set; }
@@ -64,6 +66,11 @@ public class VintageSymphony : BaseModSystem
 		var attributeStorageFile = Path.Combine(modDataPath, "attributes.json");
 		AttributeStorage = new AttributeStorage(PersistentStoragePrefix,
 			new LocalAttributePersistenceLayer(attributeStorageFile));
+
+		// Initialize compatibility manager and load compatibility data
+		CompatibilityManager = new CompatibilityManager(ClientApi.Logger);
+		var compatibilityFilePath = Path.Combine(Mod.FileName, "compatibility.json");
+		CompatibilityManager.LoadCompatibilityData(compatibilityFilePath);
 
 		if (!Harmony.HasAnyPatches(ModId))
 		{

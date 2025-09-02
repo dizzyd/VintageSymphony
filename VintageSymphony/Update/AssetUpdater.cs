@@ -9,7 +9,7 @@ public class AssetUpdater : BaseModSystem
 	private const string AssetModId = "vintagesymphonyassets";
 
 	private readonly GitHubReleaseFetcher releaseFetcher = new();
-	private Task<Release?>? releaseFetcherTask;
+	private Task<IEnumerable<Release>>? releaseFetcherTask;
 	private Task? upgradeTask;
 	private UpdateInstalledOverlay? updateOverlay;
 	private UpdateProgressOverlay? progressOverlay;
@@ -28,7 +28,7 @@ public class AssetUpdater : BaseModSystem
 		clientApi!.Logger.Notification($"Checking {AssetModId} for available updates…");
 
 		releaseFetcherListener = clientApi!.World.RegisterGameTickListener(FetchLatestRelease, 1000, 2000);
-		releaseFetcherTask = releaseFetcher.GetLatestReleaseAsync(ApiUrl);
+		releaseFetcherTask = releaseFetcher.GetAllReleasesAsync(ApiUrl);
 		updateOverlay = new UpdateInstalledOverlay(clientApi);
 		progressOverlay = new UpdateProgressOverlay(clientApi);
 	}
@@ -41,14 +41,24 @@ public class AssetUpdater : BaseModSystem
 		}
 
 		clientApi!.World.UnregisterGameTickListener(releaseFetcherListener);
-		var release = releaseFetcherTask?.Result;
-		if (release == null)
+		var releases = releaseFetcherTask?.Result;
+		if (releases == null || !releases.Any())
 		{
 			clientApi.Logger.Error($"Failed to get {AssetModId} release information from GitHub");
 			return;
 		}
 
-		InterpretRelease(release);
+		// Filter releases by compatibility constraints and get the most recent compatible one
+		var compatibleReleases = VintageSymphony.CompatibilityManager.FilterCompatibleReleases(AssetModId, releases);
+		var bestRelease = compatibleReleases.FirstOrDefault(); // Already ordered by version descending
+
+		if (bestRelease == null)
+		{
+			clientApi.Logger.Warning($"No compatible {AssetModId} releases found");
+			return;
+		}
+
+		InterpretRelease(bestRelease);
 	}
 
 	private void InterpretRelease(Release release)

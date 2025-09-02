@@ -31,6 +31,32 @@ public class GitHubReleaseFetcher
 		}
 	}
 
+	public async Task<IEnumerable<Release>> GetAllReleasesAsync(string apiUrl)
+	{
+		try
+		{
+			httpClient.DefaultRequestHeaders.Add("User-Agent", "C# App");
+
+			HttpResponseMessage response = await httpClient.GetAsync(apiUrl);
+			response.EnsureSuccessStatusCode();
+			string content = await response.Content.ReadAsStringAsync();
+			JArray releases = JArray.Parse(content);
+
+			// Return all valid releases
+			return releases
+				.Select(GetRelease)
+				.Where(release => release != null)
+				.Cast<Release>()
+				.OrderByDescending(release => release.Version);
+		}
+		catch (Exception ex)
+		{
+			// Handle exceptions (e.g., network errors, JSON parsing errors)
+			Console.WriteLine($"An error occurred: {ex.Message}");
+			return Enumerable.Empty<Release>();
+		}
+	}
+
 	private Release? GetRelease(JToken obj)
 	{
 		var tagName = obj["tag_name"]!.ToString();
