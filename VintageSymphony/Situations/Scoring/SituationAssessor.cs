@@ -6,7 +6,7 @@ using VintageSymphony.Util;
 
 namespace VintageSymphony.Situations.Scoring;
 
-public class SituationAssessor
+public class SituationAssessor : IDisposable
 {
 	private readonly List<SituationAssessment> assessments = new();
 	private readonly Dictionary<Situation, List<SituationAssessment>> aversions = new();
@@ -51,6 +51,15 @@ public class SituationAssessor
 				.Where(a => situationAversions.Contains(a.Situation))
 				.ToList();
 		}
+	}
+
+	/// <summary>
+	/// The collector holds a tick listener and a block-changed subscription, so it has to
+	/// be let go of when the world does.
+	/// </summary>
+	public void Dispose()
+	{
+		situationalFactsCollector.Dispose();
 	}
 
 	public void Update(float dt)

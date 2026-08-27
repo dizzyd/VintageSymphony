@@ -86,6 +86,7 @@ public class MusicEngine : BaseModSystem
 		situationUpdateCancellationTokenSource.Cancel();
 		UnregisterTickListeners(playbackUpdateEventId);
 		UnregisterTickListeners(trackCooldownCleanupEventId);
+		situationAssessor?.Dispose();
 		base.Dispose();
 	}
 

@@ -2,6 +2,7 @@ using System.Xml.Schema;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
 using VintageSymphony.Storage;
@@ -48,6 +49,13 @@ public class SituationalFactsCollector
 	private readonly int seaLevel;
 	private readonly ModSystemRifts riftModSystem;
 
+	/// <summary>Past this a visible enemy scores the same as none at all - see DangerEvaluator.</summary>
+	private const float VisibleEnemyRelevantDistance = 25f;
+
+	private const int ResonatorScanIntervalMs = 1000;
+	private readonly long resonatorScanListenerId;
+	private volatile float playingResonatorDistance = float.PositiveInfinity;
+
 	public SituationalFactsCollector(AttributeStorage attributeStorage)
 	{
 		clientApi = VintageSymphony.ClientApi;
@@ -57,6 +65,14 @@ public class SituationalFactsCollector
 		worldHeight = clientApi.World.BlockAccessor.MapSize.Y;
 		seaLevel = clientApi.World.SeaLevel;
 		riftModSystem = clientApi.ModLoader.GetModSystem<ModSystemRifts>();
+		resonatorScanListenerId =
+			clientApi.World.RegisterGameTickListener(ScanForPlayingResonators, ResonatorScanIntervalMs);
+	}
+
+	public void Dispose()
+	{
+		clientApi.World.UnregisterGameTickListener(resonatorScanListenerId);
+		clientApi.Event.BlockChanged -= OnBlockChanged;
 	}
 
 	private long GetNow() => clientApi.InWorldEllapsedMilliseconds;
@@ -96,7 +112,7 @@ public class SituationalFactsCollector
 		UpdateRiftDistance();
 		UpdateSunFacts();
 		UpdateAlive();
-		UpdateResonators();
+		facts.PlayingResonatorDistance = playingResonatorDistance;
 
 		return facts;
 	}
@@ -204,29 +220,48 @@ public class SituationalFactsCollector
 		);
 	}
 
+	/// <summary>
+	/// Distance first, line of sight second. Only the *nearest* visible enemy is wanted,
+	/// so ordering by distance and stopping at the first one in sight costs one raytrace
+	/// where testing every enemy cost one each - and raytracing is the second most
+	/// expensive thing here, growing with the size of the horde.
+	/// </summary>
 	private void UpdateEnemyDistance(Entity[] nearbyEnemies)
 	{
 		var playerPos = PlayerEntity.Pos.XYZFloat;
 
 		float closestDistance = float.PositiveInfinity;
-		float closestVisibleDistance = float.PositiveInfinity;
+		var distances = new float[nearbyEnemies.Length];
 
-		foreach (var entity in nearbyEnemies)
+		for (int i = 0; i < nearbyEnemies.Length; i++)
 		{
-			float distance = MoreMath.DistanceWithWeightedVerticality(entity.Pos.XYZFloat, playerPos, 3f);
-			if (distance < closestDistance)
+			distances[i] = MoreMath.DistanceWithWeightedVerticality(nearbyEnemies[i].Pos.XYZFloat, playerPos, 3f);
+			if (distances[i] < closestDistance)
 			{
-				closestDistance = distance;
+				closestDistance = distances[i];
+			}
+		}
+
+		// Sorts nearbyEnemies alongside, which UpdateIsAttacked does not mind - it reads
+		// all of them regardless of order.
+		Array.Sort(distances, nearbyEnemies);
+
+		float closestVisibleDistance = float.PositiveInfinity;
+		for (int i = 0; i < nearbyEnemies.Length; i++)
+		{
+			// Nothing further out can contribute: DangerEvaluator maps a visible enemy at
+			// 25 blocks to zero and FightEvaluator gives up at 10, so raytracing to the
+			// 50 block fetch radius can only produce a value indistinguishable from
+			// nothing in sight. Sorted by distance, so the rest are further still.
+			if (distances[i] > VisibleEnemyRelevantDistance)
+			{
+				break;
 			}
 
-			if (!IsEntityVisible(entity))
+			if (IsEntityVisible(nearbyEnemies[i]))
 			{
-				continue;
-			}
-
-			if (distance < closestVisibleDistance)
-			{
-				closestVisibleDistance = distance;
+				closestVisibleDistance = distances[i];
+				break;
 			}
 		}
 
@@ -239,9 +274,15 @@ public class SituationalFactsCollector
 		try
 		{
 			var playerEyePos = PlayerEntity.Pos.XYZ + PlayerEntity.LocalEyePos;
+
+			// Aim at the middle of the creature, not at its feet: a ray from eye height
+			// down to the ground clips the soil in front of a creature standing a couple
+			// of blocks away, so an enemy in plain sight reads as hidden.
+			var targetHeight = (entity.SelectionBox?.Y2 ?? entity.CollisionBox?.Y2 ?? 1f) / 2f;
+
 			clientApi.World.RayTraceForSelection(
 				playerEyePos,
-				entity.Pos.XYZ,
+				entity.Pos.XYZ.Add(0, targetHeight, 0),
 				ref raytraceIntersectionBlock,
 				ref raytraceIntersectionEntity,
 				efilter: _ => false);
@@ -342,36 +383,55 @@ public class SituationalFactsCollector
 		facts.Alive = VintageSymphony.ClientMain.EntityPlayer.Alive;
 	}
 
-	private void UpdateResonators()
+	/// <summary>
+	/// A resonator is a block entity, and the chunks already index those - so ask the
+	/// chunks rather than reading every block in range. Walking the 37^3 blocks the old
+	/// way cost more than everything else this collector does put together, and it cost
+	/// it whether or not a resonator existed.
+	///
+	/// Block entity dictionaries belong to the main thread, so this runs there on its own
+	/// tick and leaves the answer for the fact thread to pick up. Once a second is ample
+	/// for "is a resonator playing near me".
+	/// </summary>
+	private void ScanForPlayingResonators(float dt)
 	{
 		const int radius = SituationalFacts.PlayingResonatorDistanceMax;
+		const int chunkSize = GlobalConstants.ChunkSize;
+
 		var playerPos = PlayerEntity.Pos.AsBlockPos;
-		var blockAccessor = clientApi.World.GetLockFreeBlockAccessor();
-		facts.PlayingResonatorDistance = float.PositiveInfinity;
+		var nearest = float.PositiveInfinity;
 
-		blockAccessor.WalkBlocks(
-			playerPos.SubCopy(radius, radius, radius),
-			playerPos.AddCopy(radius, radius, radius),
-			(block, x, y, z) =>
+		int minChunkY = Math.Max(0, (playerPos.Y - radius) / chunkSize);
+		int maxChunkY = (playerPos.Y + radius) / chunkSize;
+
+		for (int cx = (playerPos.X - radius) / chunkSize; cx <= (playerPos.X + radius) / chunkSize; cx++)
+		for (int cy = minChunkY; cy <= maxChunkY; cy++)
+		for (int cz = (playerPos.Z - radius) / chunkSize; cz <= (playerPos.Z + radius) / chunkSize; cz++)
+		{
+			var chunk = clientApi.World.BlockAccessor.GetChunk(cx, cy, cz);
+			if (chunk?.BlockEntities == null)
 			{
-				if (!block?.Code?.PathStartsWith("resonator") ?? true)
+				continue;
+			}
+
+			foreach (var (blockPos, blockEntity) in chunk.BlockEntities)
+			{
+				if (blockEntity is not BlockEntityResonator { IsPlaying: true })
 				{
-					return;
+					continue;
 				}
 
-				var blockPos = new BlockPos(x, y, z);
-				var playing = blockAccessor.GetBlockEntity<BlockEntityResonator>(blockPos)?.IsPlaying ?? false;
-				if (!playing)
-				{
-					return;
-				}
-
+				// The chunks cover the range in whole chunks, so the corners reach further
+				// than the radius does.
 				var distance = blockPos.DistanceTo(playerPos);
-				if (distance < facts.PlayingResonatorDistance)
+				if (distance <= radius && distance < nearest)
 				{
-					facts.PlayingResonatorDistance = distance;
+					nearest = (float)distance;
 				}
-			});
+			}
+		}
+
+		playingResonatorDistance = nearest;
 	}
 
 	private static bool IsBedBlock(Block? block)
