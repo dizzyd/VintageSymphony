@@ -6,6 +6,7 @@ using Vintagestory.Client.NoObf;
 using VintageSymphony.Config;
 using VintageSymphony.Debug;
 using VintageSymphony.Engine;
+using VintageSymphony.Music;
 using VintageSymphony.Storage;
 using VintageSymphony.Update;
 
@@ -36,6 +37,38 @@ public class VintageSymphony : BaseModSystem
 
 	public override double ExecuteOrder() => 1.5;
 	public override bool ShouldLoad(EnumAppSide side) => true;
+
+	public static MusicSources MusicSources { get; private set; }
+
+	/// <summary>
+	/// Let music be folders of files rather than mods. Each source is registered as an
+	/// asset origin under its own domain, which puts it in front of the asset manager
+	/// exactly like a mod's assets would - so the game resolves the .ogg files normally,
+	/// two sources cannot collide, and nothing has to be installed into the player's Mods
+	/// directory or declare a dependency on anything.
+	///
+	/// StartPre runs before any mod receives Start(), which is early enough for the assets
+	/// to be read.
+	/// </summary>
+	public override void StartPre(ICoreAPI api)
+	{
+		base.StartPre(api);
+
+		if (api.Side != EnumAppSide.Client)
+		{
+			return;
+		}
+
+		MusicSources = new MusicSources(Path.Combine(api.DataBasePath, "ModData", Mod.Info.ModID), api.Logger);
+		MusicSources.Load();
+
+		foreach (var source in MusicSources.Installed)
+		{
+			api.Assets.AddModOrigin(source.Id, MusicSources.DirectoryOf(source));
+			api.Logger.Notification("Music source '{0}' registered from {1}",
+				source.Id, MusicSources.DirectoryOf(source));
+		}
+	}
 
 	public override void StartClientSide(ICoreClientAPI api)
 	{

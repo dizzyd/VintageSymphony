@@ -3,6 +3,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.Client.NoObf;
+using VintageSymphony.Music;
 using VintageSymphony.Situations.Scoring;
 
 namespace VintageSymphony.Engine;
@@ -150,7 +151,7 @@ public class MusicEngine : BaseModSystem
 		musicCurator.Tracks = new List<MusicTrack>();
 	}
 
-	public void LoadTracks(IMusicTrack[] allTracks)
+	public void LoadTracks(IMusicTrack[] allTracks, IMusicEngine gameMusicEngine)
 	{
 		// The game populates shuffledTracks on a background thread, so it can still be null
 		// while OnEverySecond (and therefore our patch) is already ticking.
@@ -159,31 +160,52 @@ public class MusicEngine : BaseModSystem
 			return;
 		}
 
-		var modId = Mod.Info.ModID;
-		var filter = new TrackFilter(VintageSymphony.Configuration, modId);
-		var kept = allTracks.Where(filter.KeepTrack).ToList();
+		var sources = VintageSymphony.MusicSources;
 
-		musicCurator.Tracks = kept
+		// Enabled, not installed: a source's music may arrive from a folder we registered
+		// an origin for, or from a mod someone already had installed that happens to use
+		// the same domain. Both are that source's music.
+		var domains = sources.Enabled.Select(s => s.Id).ToHashSet();
+		var filter = new TrackFilter(VintageSymphony.Configuration, domains);
+
+		// Two kinds of track end up in the same pool: the ones the game parsed out of a
+		// musicconfig.json, and the ones we built from a simple tracks.json ourselves.
+		var fromGame = allTracks.Where(filter.KeepTrack).ToList();
+		var tracks = fromGame
 			.Select(t => t as MusicTrack ?? new MusicTrackWrapper(t))
 			.ToList();
 
-		LogPoolComposition(kept, allTracks.Length, modId);
+		var local = VintageSymphony.Configuration.LoadVintageSymphonyMusic
+			? new LocalMusicLoader(sources, clientApi!).LoadTracks(gameMusicEngine)
+			: new List<MusicTrack>();
+
+		tracks.AddRange(local);
+		musicCurator.Tracks = tracks;
+
+		LogPoolComposition(fromGame, local, allTracks.Length);
 	}
 
 	/// <summary>
-	/// What ended up in the pool, and where it came from. The pool is built once and
-	/// the configuration decides what is in it, so without this line an unexpected
-	/// track playing later can only be guessed at.
+	/// What ended up in the pool, and where each part of it came from. The pool is built
+	/// once and the configuration decides what is in it, so without this line an
+	/// unexpected track playing later can only be guessed at.
 	/// </summary>
-	private void LogPoolComposition(IList<IMusicTrack> kept, int available, string modId)
+	private void LogPoolComposition(IList<IMusicTrack> fromGame, IList<MusicTrack> local, int available)
 	{
-		int Surface(string domain) =>
-			kept.Count(t => t is SurfaceMusicTrack surface && surface.Location?.Domain == domain);
+		var parts = new List<string>();
 
-		Logger.Notification(
-			"Loaded {0} of {1} music tracks: {2} Vintage Symphony, {3} Vintage Story, {4} cave",
-			musicCurator.Tracks.Count, available, Surface(modId), Surface(GlobalConstants.DefaultDomain),
-			kept.Count(t => t is CaveMusicTrack));
+		foreach (var source in VintageSymphony.MusicSources.Enabled)
+		{
+			var count = fromGame.Count(t => t is SurfaceMusicTrack s && s.Location?.Domain == source.Id)
+			            + local.Count(t => t.Location?.Domain == source.Id);
+			parts.Add($"{count} {source.Id}");
+		}
+
+		parts.Add($"{fromGame.Count(t => t is SurfaceMusicTrack s && s.Location?.Domain == GlobalConstants.DefaultDomain)} Vintage Story");
+		parts.Add($"{fromGame.Count(t => t is CaveMusicTrack)} cave");
+
+		Logger.Notification("Loaded {0} music tracks ({1} offered by the game): {2}",
+			musicCurator.Tracks.Count, available, string.Join(", ", parts));
 	}
 
 	private bool TracksLoaded()

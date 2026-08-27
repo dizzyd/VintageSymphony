@@ -11,10 +11,13 @@ namespace VintageSymphony.Patches;
 [HarmonyPatch(typeof(SystemMusicEngine), "OnEverySecond")]
 public class MusicEngineUpdatePatch
 {
-    static bool Prefix(float dt, 
+    static bool Prefix(float dt,
+        SystemMusicEngine __instance,
         IMusicTrack[] ___shuffledTracks)
     {
-        VintageSymphony.MusicEngine?.LoadTracks(___shuffledTracks);
-        return false; 
+        // __instance is the game's own IMusicEngine, which is what actually loads a sound
+        // for a track - tracks we build ourselves need it too.
+        VintageSymphony.MusicEngine?.LoadTracks(___shuffledTracks, __instance);
+        return false;
     }
 }

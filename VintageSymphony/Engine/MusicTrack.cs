@@ -21,7 +21,15 @@ public class MusicTrack : SurfaceMusicTrack
 	private string? trackTitle;
 #pragma warning restore CS0649
 
-	public string Title => trackTitle ?? Name;
+	/// <summary>
+	/// What /music info shows. Settable so tracks built from a tracks.json manifest can
+	/// carry the name their author gave them rather than a file path.
+	/// </summary>
+	public string Title
+	{
+		get => trackTitle ?? Name;
+		set => trackTitle = value;
+	}
 
 	[JsonProperty]
 	public float MinTemperature = -99;
