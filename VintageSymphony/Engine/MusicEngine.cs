@@ -1,6 +1,7 @@
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Config;
 using Vintagestory.Client.NoObf;
 using VintageSymphony.Situations.Scoring;
 
@@ -136,11 +137,31 @@ public class MusicEngine : BaseModSystem
 			return;
 		}
 
-		var filter = new TrackFilter(VintageSymphony.Configuration, Mod.Info.ModID);
-		musicCurator.Tracks = allTracks
-			.Where(filter.KeepTrack)
+		var modId = Mod.Info.ModID;
+		var filter = new TrackFilter(VintageSymphony.Configuration, modId);
+		var kept = allTracks.Where(filter.KeepTrack).ToList();
+
+		musicCurator.Tracks = kept
 			.Select(t => t as MusicTrack ?? new MusicTrackWrapper(t))
 			.ToList();
+
+		LogPoolComposition(kept, allTracks.Length, modId);
+	}
+
+	/// <summary>
+	/// What ended up in the pool, and where it came from. The pool is built once and
+	/// the configuration decides what is in it, so without this line an unexpected
+	/// track playing later can only be guessed at.
+	/// </summary>
+	private void LogPoolComposition(IList<IMusicTrack> kept, int available, string modId)
+	{
+		int Surface(string domain) =>
+			kept.Count(t => t is SurfaceMusicTrack surface && surface.Location?.Domain == domain);
+
+		Logger.Notification(
+			"Loaded {0} of {1} music tracks: {2} Vintage Symphony, {3} Vintage Story, {4} cave",
+			musicCurator.Tracks.Count, available, Surface(modId), Surface(GlobalConstants.DefaultDomain),
+			kept.Count(t => t is CaveMusicTrack));
 	}
 
 	private bool TracksLoaded()
