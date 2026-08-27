@@ -40,7 +40,7 @@ namespace VintageSymphony.Tests
                 // the game's music in front of it deliberately.
                 VS.Configuration.LoadGameMusic = true;
                 curator.Tracks = new List<Engine.MusicTrack>();
-                engine.LoadTracks(vanilla);
+                engine.LoadTracks(vanilla, Vanilla());
 
                 Assert.Equal(vanilla.Length, curator.Tracks.Count,
                     "every vanilla track survives the filter when game music is on");
