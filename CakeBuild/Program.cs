@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using Cake.Common;
 using Cake.Common.IO;
 using Cake.Common.Tools.DotNet;
@@ -56,6 +57,7 @@ public class BuildContext : FrostingContext
 	public string ModAssetsName { get; }
 	public bool SkipJsonValidation { get; set; }
 	public string TargetFramework { get; set; }
+	private const string DefaultTargetFramework = "net10.0";
 
 
 	public BuildContext(ICakeContext context)
@@ -93,16 +95,16 @@ public class BuildContext : FrostingContext
 			var vsPath = Environment.GetEnvironmentVariable("VINTAGE_STORY");
 			if (string.IsNullOrEmpty(vsPath))
 			{
-				Console.WriteLine("VINTAGE_STORY environment variable not set. Defaulting to net8.0");
-				return "net8.0";
+				Console.WriteLine($"VINTAGE_STORY environment variable not set. Defaulting to {DefaultTargetFramework}");
+				return DefaultTargetFramework;
 			}
             
 			// Path to the main API DLL
 			var apiDllPath = Path.Combine(vsPath, "VintagestoryAPI.dll");
 			if (!File.Exists(apiDllPath))
 			{
-				Console.WriteLine($"VintagestoryAPI.dll not found at {apiDllPath}. Defaulting to net8.0");
-				return "net8.0";
+				Console.WriteLine($"VintagestoryAPI.dll not found at {apiDllPath}. Defaulting to {DefaultTargetFramework}");
+				return DefaultTargetFramework;
 			}
             
 			// Load the assembly and check its target framework
@@ -113,20 +115,21 @@ public class BuildContext : FrostingContext
 			{
 				var frameworkName = targetFrameworkAttribute.FrameworkName;
 				Console.WriteLine($"Detected framework: {frameworkName}");
-                
-				if (frameworkName.Contains(".NETCoreApp,Version=v7."))
-					return "net7.0";
-				else if (frameworkName.Contains(".NETCoreApp,Version=v8."))
-					return "net8.0";
+
+				var match = Regex.Match(frameworkName, @"^\.NETCoreApp,Version=v(\d+)\.(\d+)$");
+				if (match.Success)
+				{
+					return $"net{match.Groups[1].Value}.{match.Groups[2].Value}";
+				}
 			}
-            
-			// Fallback to checking assembly references for .NET version indicators
-			return "net8.0"; // Default to the latest if can't determine
+
+			// Fallback if the attribute is missing or unparseable
+			return DefaultTargetFramework;
 		}
 		catch (Exception ex)
 		{
 			Console.WriteLine($"Error detecting framework: {ex.Message}");
-			return "net8.0"; // Default to the latest if detection fails
+			return DefaultTargetFramework; // Default to the latest if detection fails
 		}
 	}
 

@@ -5,7 +5,8 @@ Scope
 
 Build and Configuration
 1. Toolchain
-   - .NET SDK: The solution targets net8.0 for both VintageSymphony and CakeBuild projects. A global.json is present with sdk.version=7.0.0 and rollForward=latestMajor, allowing .NET 8 to be used. Prefer SDK 8.0.x; SDK 7.0.x works if rollForward to 8 is available on the machine.
+   - .NET SDK: The solution targets net10.0 for both VintageSymphony and CakeBuild projects, which is what Vintage Story 1.22 runs on. A global.json is present with sdk.version=7.0.0 and rollForward=latestMajor, so any newer SDK on the machine is used; in practice that means SDK 10.0.x.
+   - Game version: 1.22 and newer. modinfo.json declares `"game": "1.22.0"` - a bare version string, which the game reads as a minimum. A net10.0 build cannot load on 1.21 or earlier, so that constraint is what keeps it off those versions.
    - OS: Build tested primarily on Linux and Windows; macOS should work if prerequisites are satisfied.
 
 2. External Dependencies (mandatory)
@@ -25,11 +26,11 @@ Build and Configuration
 3. Solution and Projects
    - Solution file: MM.sln
    - Projects:
-     - VintageSymphony/VintageSymphony.csproj (net8.0)
+     - VintageSymphony/VintageSymphony.csproj (net10.0)
        - Nullable: enable; ImplicitUsings: enable
        - Copies VintageSymphony/modinfo.json and everything under VintageSymphony/assets/** (if present) to output
        - References external DLLs via $(VINTAGE_STORY)
-     - CakeBuild/CakeBuild.csproj (net8.0)
+     - CakeBuild/CakeBuild.csproj (net10.0)
        - Cake.Frosting-based build/packaging pipeline
        - References VintagestoryAPI via $(VINTAGE_STORY)
 
