@@ -128,6 +128,23 @@ public class MusicEngine : BaseModSystem
 		playback.NextTrack();
 	}
 
+	/// <summary>
+	/// Rebuild the track pool under the current configuration. The game only hands us
+	/// its track list through the patched engine tick, so this drops what we hold and
+	/// lets the next tick refill it - within a second, rather than at the next restart.
+	/// </summary>
+	public void ReloadTracks()
+	{
+		if (!IsGameStarted)
+		{
+			return;
+		}
+
+		Logger.Notification("Reloading music tracks");
+		playback.Reset();
+		musicCurator.Tracks = new List<MusicTrack>();
+	}
+
 	public void LoadTracks(IMusicTrack[] allTracks)
 	{
 		// The game populates shuffledTracks on a background thread, so it can still be null

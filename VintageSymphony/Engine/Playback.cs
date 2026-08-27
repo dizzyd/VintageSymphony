@@ -134,6 +134,19 @@ public class Playback
 			.FirstOrDefault();
 	}
 
+	/// <summary>
+	/// Forget what is playing and what was selected. The playlists are rebuilt when the
+	/// track pool changes, so both the current track and the playlist holding it can
+	/// cease to exist; clearing the pause too lets the curator start again immediately
+	/// instead of sitting out a pause that belonged to the old selection.
+	/// </summary>
+	public void Reset()
+	{
+		StopTrack();
+		CurrentPlaylist = null;
+		Pause.Stop();
+	}
+
 	public void NextTrack()
 	{
 		StopTrack();
