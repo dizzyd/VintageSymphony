@@ -129,7 +129,9 @@ public class MusicEngine : BaseModSystem
 
 	public void LoadTracks(IMusicTrack[] allTracks)
 	{
-		if (TracksLoaded())
+		// The game populates shuffledTracks on a background thread, so it can still be null
+		// while OnEverySecond (and therefore our patch) is already ticking.
+		if (allTracks == null || TracksLoaded())
 		{
 			return;
 		}
