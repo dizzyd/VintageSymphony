@@ -62,9 +62,9 @@ public class SituationAssessor : IDisposable
 		situationalFactsCollector.Dispose();
 	}
 
-	public void Update(float dt)
+	public void Update(float deltaTimeS)
 	{
-		facts = situationalFactsCollector.GatherFacts(dt);
+		facts = situationalFactsCollector.GatherFacts(deltaTimeS);
 
 		foreach (var assessment in assessments)
 		{
@@ -80,19 +80,19 @@ public class SituationAssessor : IDisposable
 			}
 
 			newCertainty = Math.Clamp(newCertainty, 0f, 1);
-			assessment.Score = ExponentialSmoothing(assessment, dt, assessment.Score, newCertainty);
+			assessment.Score = ExponentialSmoothing(assessment, deltaTimeS, assessment.Score, newCertainty);
 		}
 
 		assessments.Sort(scoreComparator);
 	}
 
-	private static float ExponentialSmoothing(SituationAssessment assessment, float dt, float oldCertainty,
+	private static float ExponentialSmoothing(SituationAssessment assessment, float deltaTimeS, float oldCertainty,
 		float newCertainty)
 	{
 		if ((newCertainty > oldCertainty && assessment.SmoothIncreasingScore)
 		    || (newCertainty < oldCertainty && assessment.SmoothDecreasingScore))
 		{
-			return MoreMath.ExponentialSmoothing(oldCertainty, newCertainty, 0.2f, dt);
+			return MoreMath.ExponentialSmoothing(oldCertainty, newCertainty, 0.2f, deltaTimeS);
 		}
 
 		return newCertainty;

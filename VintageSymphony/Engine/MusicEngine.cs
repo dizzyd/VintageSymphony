@@ -105,11 +105,15 @@ public class MusicEngine : BaseModSystem
 
 	private void UpdateSituation()
 	{
-		long lastUpdate = 0;
+		long lastUpdate = clientApi?.InWorldEllapsedMilliseconds ?? 0;
 		while (!SituationUpdateCancellationToken.IsCancellationRequested)
 		{
 			long now = clientApi?.InWorldEllapsedMilliseconds ?? 0;
-			situationAssessor.Update(now - lastUpdate);
+
+			// Seconds. The assessor smooths with 1 - exp(-strength * dt), so handing it
+			// milliseconds made every step exp(-60) away from a straight assignment - the
+			// smoothing, and every per-situation flag built on it, did nothing at all.
+			situationAssessor.Update((now - lastUpdate) / 1000f);
 			lastUpdate = now;
 			
 			try
