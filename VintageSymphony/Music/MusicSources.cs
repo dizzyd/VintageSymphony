@@ -67,8 +67,10 @@ public class MusicSources
 	public void Save()
 	{
 		Directory.CreateDirectory(RootPath);
+		// A file people are meant to read and edit should not be padded with nulls.
 		File.WriteAllText(Path.Combine(RootPath, FileName),
-			JsonConvert.SerializeObject(Sources, Formatting.Indented));
+			JsonConvert.SerializeObject(Sources, Formatting.Indented,
+				new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
 	}
 
 	private static List<MusicSource> DefaultSources() => new()

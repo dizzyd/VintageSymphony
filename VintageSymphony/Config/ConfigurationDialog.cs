@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Vintagestory.API.Client;
 using VintageSymphony.Music;
 
@@ -21,6 +22,10 @@ public class ConfigurationDialog : GuiDialog
 
 	private const string GameMusicToggleKey = "vscfg_gameMusicToggle";
 	private const string OkButtonKey = "vscfg_ok";
+	private const string AddButtonKey = "vscfg_add";
+	private const string AddIdKey = "vscfg_add_id";
+	private const string AddUrlKey = "vscfg_add_url";
+	private const string AddStatusKey = "vscfg_add_status";
 	private const string PrevKey = "vscfg_prev";
 	private const string NextKey = "vscfg_next";
 
@@ -37,6 +42,9 @@ public class ConfigurationDialog : GuiDialog
 
 	private string busySourceId;
 	private int page;
+	private string draftAddId = "";
+	private string draftAddUrl = "";
+	private string addStatus = "";
 
 	public ConfigurationDialog(ICoreClientAPI api, Configuration configuration,
 		ConfigurationLoader configurationLoader, MusicSources sources)
@@ -65,7 +73,8 @@ public class ConfigurationDialog : GuiDialog
 
 		var pagerY = listTop + listHeight + 6;
 		var showPager = PageCount > 1;
-		var gameMusicY = pagerY + (showPager ? 40 : 10);
+		var addY = pagerY + (showPager ? 42 : 24);
+		var gameMusicY = addY + 62;
 
 		var boundsGameSwitch = ElementBounds.Fixed(10, gameMusicY, 10, 30);
 		var boundsGameLabel = ElementBounds.Fixed(50, gameMusicY + 5, DialogWidth - 60, 30);
@@ -103,7 +112,19 @@ public class ConfigurationDialog : GuiDialog
 					EnumButtonStyle.Normal, NextKey);
 		}
 
+		// Adding a source belongs here rather than in a chat command: it is mostly a URL,
+		// and a URL is something you paste.
 		SingleComposer
+			.AddStaticText("Add a source:", CairoFont.WhiteDetailText(), EnumTextOrientation.Left,
+				ElementBounds.Fixed(10, addY - 18, 200, 20))
+			.AddTextInput(ElementBounds.Fixed(10, addY, 110, 28), text => draftAddId = text,
+				CairoFont.WhiteDetailText(), AddIdKey)
+			.AddTextInput(ElementBounds.Fixed(128, addY, 262, 28), text => draftAddUrl = text,
+				CairoFont.WhiteDetailText(), AddUrlKey)
+			.AddSmallButton("Add", OnAddSource, ElementBounds.Fixed(400, addY, 70, 28),
+				EnumButtonStyle.Normal, AddButtonKey)
+			.AddDynamicText(addStatus, CairoFont.WhiteDetailText(),
+				ElementBounds.Fixed(10, addY + 30, DialogWidth - 20, 20), AddStatusKey)
 			.AddSwitch(state => draftLoadGameMusic = state, boundsGameSwitch, GameMusicToggleKey)
 			.AddStaticText("Also play Vintage Story's own music", CairoFont.WhiteSmallText(),
 				EnumTextOrientation.Left, boundsGameLabel)
@@ -113,6 +134,56 @@ public class ConfigurationDialog : GuiDialog
 			.Compose();
 
 		RestoreSwitchStates();
+
+		SingleComposer.GetTextInput(AddIdKey).SetPlaceHolderText("name");
+		SingleComposer.GetTextInput(AddUrlKey).SetPlaceHolderText("https://...");
+		SingleComposer.GetTextInput(AddIdKey).SetValue(draftAddId);
+		SingleComposer.GetTextInput(AddUrlKey).SetValue(draftAddUrl);
+	}
+
+	/// <summary>
+	/// Register a place to download from. The id names a folder and an asset domain, so it
+	/// has to be plain text; the url has to be one we can actually fetch.
+	/// </summary>
+	private bool OnAddSource()
+	{
+		var id = draftAddId.Trim().ToLowerInvariant();
+		var url = draftAddUrl.Trim();
+
+		if (!Regex.IsMatch(id, "^[a-z0-9][a-z0-9-]{0,31}$"))
+		{
+			return SetAddStatus("A name may only use lowercase letters, digits and dashes.");
+		}
+
+		if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+		{
+			return SetAddStatus("That does not look like an http address.");
+		}
+
+		if (sources.Sources.Any(s => s.Id == id))
+		{
+			return SetAddStatus($"There is already a source called '{id}'.");
+		}
+
+		sources.Sources.Add(new MusicSource { Id = id, Name = id, Enabled = true, Url = url });
+		sources.Save();
+
+		draftSourceEnabled[id] = true;
+		draftAddId = "";
+		draftAddUrl = "";
+		addStatus = $"Added '{id}' - press Download to fetch it.";
+
+		// Show it straight away, on the page it landed on.
+		page = (sources.Sources.Count - 1) / RowsPerPage;
+		SetupDialog();
+		return true;
+	}
+
+	private bool SetAddStatus(string text)
+	{
+		addStatus = text;
+		SingleComposer.GetDynamicText(AddStatusKey)?.SetNewText(text);
+		return true;
 	}
 
 	private IEnumerable<MusicSource> PageOfSources() =>
