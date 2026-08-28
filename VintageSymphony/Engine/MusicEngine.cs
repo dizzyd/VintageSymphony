@@ -175,10 +175,7 @@ public class MusicEngine : BaseModSystem
 			.Select(t => t as MusicTrack ?? new MusicTrackWrapper(t))
 			.ToList();
 
-		var local = VintageSymphony.Configuration.LoadVintageSymphonyMusic
-			? new LocalMusicLoader(sources, clientApi!).LoadTracks(gameMusicEngine)
-			: new List<MusicTrack>();
-
+		var local = new LocalMusicLoader(sources, clientApi!).LoadTracks(gameMusicEngine);
 		tracks.AddRange(local);
 		musicCurator.Tracks = tracks;
 

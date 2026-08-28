@@ -33,7 +33,9 @@ public class MusicSources
 	public IEnumerable<MusicSource> Enabled => Sources.Where(s => s.Enabled && s.Id.Length > 0);
 
 	/// <summary>Sources that are enabled and actually have music sitting on disk.</summary>
-	public IEnumerable<MusicSource> Installed => Enabled.Where(s => Directory.Exists(MusicPathOf(s)));
+	public IEnumerable<MusicSource> Installed => Enabled.Where(HasMusicOnDisk);
+
+	public bool HasMusicOnDisk(MusicSource source) => Directory.Exists(MusicPathOf(source));
 
 	public string DirectoryOf(MusicSource source) => Path.Combine(RootPath, SourcesFolder, source.Id);
 	public string MusicPathOf(MusicSource source) => Path.Combine(DirectoryOf(source), MusicFolder);

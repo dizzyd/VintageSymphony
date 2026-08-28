@@ -27,7 +27,6 @@ public class VintageSymphony : BaseModSystem
 	public static DebugOverlay DebugOverlay { get; private set; }
 	public static Configuration Configuration { get; private set; }
 	public static ConfigurationDialog ConfigurationDialog { get; private set; }
-	public static CompatibilityManager CompatibilityManager { get; private set; }
 
 	private string ModId => Mod.Info.ModID;
 	public AttributeStorage AttributeStorage { get; private set; }
@@ -100,9 +99,6 @@ public class VintageSymphony : BaseModSystem
 		AttributeStorage = new AttributeStorage(PersistentStoragePrefix,
 			new LocalAttributePersistenceLayer(attributeStorageFile));
 
-		// Initialize compatibility manager and load compatibility data
-		CompatibilityManager = new CompatibilityManager(ClientApi.Logger);
-		CompatibilityManager.LoadCompatibilityData(ClientApi, ModId);
 
 		if (!Harmony.HasAnyPatches(ModId))
 		{
@@ -113,7 +109,7 @@ public class VintageSymphony : BaseModSystem
 
 	protected override void OnGameStarted()
 	{
-		ConfigurationDialog = new ConfigurationDialog(ClientApi, Configuration, configurationLoader);
+		ConfigurationDialog = new ConfigurationDialog(ClientApi, Configuration, configurationLoader, MusicSources);
 		if (!Configuration.InitialConfigurationShown)
 		{
 			Configuration.InitialConfigurationShown = true;

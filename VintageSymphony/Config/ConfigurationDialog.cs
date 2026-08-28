@@ -1,99 +1,269 @@
 using Vintagestory.API.Client;
+using VintageSymphony.Music;
 
 namespace VintageSymphony.Config;
 
 #nullable disable
 /// <summary>
-/// The switches edit a draft, and the draft is applied when the dialog closes -
-/// by the button, the title bar, escape, or /music config toggling it shut. They all
-/// go through TryClose, so they all mean the same thing.
+/// Lists where music can come from, lets each source be switched on or off, and lets one
+/// be downloaded - on a button, never on its own.
 ///
-/// That matters because the track pool is built once, from whatever the configuration
-/// says at that moment. A switch that wrote straight through could be read halfway
-/// through startup, so the same click took effect immediately or not until the next
-/// restart depending on how far the game had got. Closing applies the draft and
-/// rebuilds the pool explicitly, on first run and from /music config alike.
+/// The switches edit a draft applied when the dialog closes, by the button, the title
+/// bar, escape, or /music config toggling it shut: they all go through TryClose, so they
+/// all mean the same thing. Downloading is not part of that draft; it is an action, and
+/// it happens when it is pressed.
 /// </summary>
 public class ConfigurationDialog : GuiDialog
 {
-	/// <summary>Drives the background's size, and what the OK button is centred in.</summary>
-	private const int DialogWidth = 400;
+	private const int DialogWidth = 500;
+	private const int RowHeight = 46;
+	private const int RowsPerPage = 6;
 
+	private const string GameMusicToggleKey = "vscfg_gameMusicToggle";
 	private const string OkButtonKey = "vscfg_ok";
-	private const string LoadGameMusicToggleKey = "vscfg_gameMusicToggle";
-	private const string LoadVintageSymphonyMusicToggleKey = "vscfg_modMusicToggle";
+	private const string PrevKey = "vscfg_prev";
+	private const string NextKey = "vscfg_next";
 
 	private readonly Configuration configuration;
 	private readonly ConfigurationLoader configurationLoader;
+	private readonly MusicSources sources;
+	private readonly MusicSourceInstaller installer;
 
 	private bool draftLoadGameMusic;
-	private bool draftLoadVintageSymphonyMusic;
+	private readonly Dictionary<string, bool> draftSourceEnabled = new();
 
-	public ConfigurationDialog(ICoreClientAPI api, Configuration configuration, ConfigurationLoader configurationLoader)
+	/// <summary>Status text per source, so a download can report itself where it belongs.</summary>
+	private readonly Dictionary<string, string> statusText = new();
+
+	private string busySourceId;
+	private int page;
+
+	public ConfigurationDialog(ICoreClientAPI api, Configuration configuration,
+		ConfigurationLoader configurationLoader, MusicSources sources)
 		: base(api)
 	{
 		this.configuration = configuration;
 		this.configurationLoader = configurationLoader;
+		this.sources = sources;
+		installer = new MusicSourceInstaller(sources, api.Logger);
 		SetupDialog();
 	}
 
+	private static string SwitchKey(MusicSource source) => "vscfg_src_" + source.Id;
+	private static string ButtonKey(MusicSource source) => "vscfg_get_" + source.Id;
+
+	private int PageCount => Math.Max(1, (sources.Sources.Count + RowsPerPage - 1) / RowsPerPage);
+
 	private void SetupDialog()
 	{
-		// Auto-sized dialog at the center of the screen
-		ElementBounds dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
+		var dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
 
-		// Sizing child: the background fits itself around what the dialog holds
-		ElementBounds textBounds = ElementBounds.Fixed(0, 40, DialogWidth, 120);
+		page = Math.Clamp(page, 0, PageCount - 1);
+		var rowsOnPage = Math.Max(1, PageOfSources().Count());
+		var listTop = 40;
+		var listHeight = rowsOnPage * RowHeight;
 
-		// Background boundaries. Again, just make it fit it's child elements, then add the text as a child element
-		ElementBounds bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
-		bgBounds.BothSizing = ElementSizing.FitToChildren;
-		bgBounds.WithChildren(textBounds);
+		var pagerY = listTop + listHeight + 6;
+		var showPager = PageCount > 1;
+		var gameMusicY = pagerY + (showPager ? 40 : 10);
 
-		const int width = 350;
-		const int height = 30;
+		var boundsGameSwitch = ElementBounds.Fixed(10, gameMusicY, 10, 30);
+		var boundsGameLabel = ElementBounds.Fixed(50, gameMusicY + 5, DialogWidth - 60, 30);
+		var boundsNote = ElementBounds.Fixed(10, gameMusicY + 40, DialogWidth - 20, 30);
 
-		// Lastly, create the dialog
-		SingleComposer = capi.Gui.CreateCompo("vintagesymphony_configuration", dialogBounds)
-			.AddShadedDialogBG(bgBounds)
-			.AddDialogTitleBar("Vintage Symphony configuration", OnTitleBarCloseClicked);
-
-		var boundsChk1 = ElementBounds.Fixed(10, 50, 10, height);
-		var boundsChk1Label = ElementBounds.Fixed(50, boundsChk1.fixedY + 5, width, boundsChk1.fixedHeight);
-		SingleComposer.AddSwitch(state => draftLoadVintageSymphonyMusic = state, boundsChk1,
-				LoadVintageSymphonyMusicToggleKey)
-			.AddStaticText("Load Vintage Symphony music", CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
-				boundsChk1Label);
-
-		var boundsChk2 = ElementBounds.Fixed(10, 90, 10, height);
-		var boundsChk2Label = ElementBounds.Fixed(50, boundsChk2.fixedY + 5, width, boundsChk2.fixedHeight);
-		SingleComposer.AddSwitch(state => draftLoadGameMusic = state, boundsChk2, LoadGameMusicToggleKey)
-			.AddStaticText("Load Vintage Story music", CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
-				boundsChk2Label);
-
-		// Element coordinates start at the frame's left edge, not inside its padding, so
-		// the frame is DialogWidth plus a padding either side and its centre sits half a
-		// padding to the right of the content box's.
 		const int okWidth = 120;
 		var okX = DialogWidth / 2 + GuiStyle.ElementToDialogPadding - okWidth / 2;
-		var boundsOk = ElementBounds.Fixed(okX, 135, okWidth, height);
-		SingleComposer.AddSmallButton("OK", OnOk, boundsOk, EnumButtonStyle.Normal, OkButtonKey);
+		var boundsOk = ElementBounds.Fixed(okX, gameMusicY + 78, okWidth, 30);
 
-		SingleComposer.Compose();
+		// Sizing child: the background fits itself around what the dialog holds
+		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, gameMusicY + 78);
+
+		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
+		bgBounds.BothSizing = ElementSizing.FitToChildren;
+		bgBounds.WithChildren(sizing);
+
+		SingleComposer?.Dispose();
+		SingleComposer = capi.Gui.CreateCompo("vintagesymphony_configuration", dialogBounds)
+			.AddShadedDialogBG(bgBounds)
+			.AddDialogTitleBar("Vintage Symphony configuration", () => TryClose());
+
+		AddSourceRows();
+
+		// A page at a time rather than a scrolling list: GuiElementClip only scissors the
+		// interactive render pass, and switches and static text bake into the composed
+		// background, so they draw straight through a clip area.
+		if (showPager)
+		{
+			SingleComposer
+				.AddSmallButton("<", () => TurnPage(-1), ElementBounds.Fixed(10, pagerY, 40, 28),
+					EnumButtonStyle.Normal, PrevKey)
+				.AddStaticText($"Page {page + 1} of {PageCount}", CairoFont.WhiteDetailText(),
+					EnumTextOrientation.Center, ElementBounds.Fixed(60, pagerY + 5, 120, 24))
+				.AddSmallButton(">", () => TurnPage(1), ElementBounds.Fixed(190, pagerY, 40, 28),
+					EnumButtonStyle.Normal, NextKey);
+		}
+
+		SingleComposer
+			.AddSwitch(state => draftLoadGameMusic = state, boundsGameSwitch, GameMusicToggleKey)
+			.AddStaticText("Also play Vintage Story's own music", CairoFont.WhiteSmallText(),
+				EnumTextOrientation.Left, boundsGameLabel)
+			.AddStaticText("Closing reloads the music selection.", CairoFont.WhiteDetailText(),
+				EnumTextOrientation.Left, boundsNote)
+			.AddSmallButton("OK", () => TryClose(), boundsOk, EnumButtonStyle.Normal, OkButtonKey)
+			.Compose();
+
+		RestoreSwitchStates();
+	}
+
+	private IEnumerable<MusicSource> PageOfSources() =>
+		sources.Sources.Skip(page * RowsPerPage).Take(RowsPerPage);
+
+	private bool TurnPage(int direction)
+	{
+		page = Math.Clamp(page + direction, 0, PageCount - 1);
+		SetupDialog();
+		return true;
 	}
 
 	/// <summary>
-	/// Start every session of the dialog from what is actually configured.
+	/// Rebuilding the composer makes new switches, so the draft has to be put back into
+	/// them - otherwise turning a page would quietly reset what the player just set.
 	/// </summary>
+	private void RestoreSwitchStates()
+	{
+		SingleComposer.GetSwitch(GameMusicToggleKey).On = draftLoadGameMusic;
+
+		foreach (var source in PageOfSources())
+		{
+			if (draftSourceEnabled.TryGetValue(source.Id, out var enabled))
+			{
+				SingleComposer.GetSwitch(SwitchKey(source)).On = enabled;
+			}
+		}
+	}
+
+	private void AddSourceRows()
+	{
+		var row = 0;
+		foreach (var source in PageOfSources())
+		{
+			var y = 40 + row * RowHeight;
+			var isBusy = source.Id == busySourceId;
+
+			SingleComposer
+				.AddSwitch(state => draftSourceEnabled[source.Id] = state,
+					ElementBounds.Fixed(6, y + 6, 10, 30), SwitchKey(source))
+				.AddStaticText(source.Name.Length > 0 ? source.Name : source.Id,
+					CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
+					ElementBounds.Fixed(46, y + 4, 280, 24))
+				.AddDynamicText(StatusOf(source), CairoFont.WhiteDetailText(),
+					ElementBounds.Fixed(46, y + 24, 280, 20), "vscfg_status_" + source.Id);
+
+			// A source with nowhere to download from is somebody's own folder: nothing to press.
+			if (!string.IsNullOrWhiteSpace(source.Url) && !isBusy)
+			{
+				// What is on disk decides, not what we remember installing: a folder
+				// someone filled in by hand is just as installed as one we fetched.
+				var label = sources.HasMusicOnDisk(source) ? "Update" : "Download";
+				var captured = source;
+				SingleComposer.AddSmallButton(label, () => OnDownload(captured),
+					ElementBounds.Fixed(340, y + 8, 120, 28), EnumButtonStyle.Normal, ButtonKey(source));
+			}
+
+			row++;
+		}
+	}
+
+	private string StatusOf(MusicSource source)
+	{
+		if (statusText.TryGetValue(source.Id, out var status))
+		{
+			return status;
+		}
+
+		if (!sources.HasMusicOnDisk(source))
+		{
+			return source.Url == null ? "no music in its folder" : "not installed";
+		}
+
+		return source.Installed == null ? "installed" : "installed " + source.Installed;
+	}
+
+	private bool OnDownload(MusicSource source)
+	{
+		if (busySourceId != null)
+		{
+			return true;
+		}
+
+		busySourceId = source.Id;
+		SetStatus(source, "checking…");
+
+		// Fire and forget on purpose: the dialog stays usable, and every step reports
+		// itself into the row it belongs to.
+		_ = DownloadAsync(source);
+		return true;
+	}
+
+	private async Task DownloadAsync(MusicSource source)
+	{
+		try
+		{
+			var release = await installer.CheckAsync(source);
+			if (release == null)
+			{
+				SetStatus(source, "nothing available - see the log");
+				return;
+			}
+
+			var size = release.SizeBytes > 0 ? $" ({release.SizeBytes / 1024 / 1024} MB)" : "";
+			SetStatus(source, $"downloading{size}…");
+
+			await installer.InstallAsync(source, release,
+				fraction => SetStatus(source, $"downloading{size} {fraction * 100:0}%"),
+				CancellationToken.None);
+
+			SetStatus(source, "installed - restart to hear it");
+		}
+		catch (Exception e)
+		{
+			capi.Logger.Error("Installing '{0}' failed: {1}", source.Id, e.Message);
+			SetStatus(source, "failed - see the log");
+		}
+		finally
+		{
+			busySourceId = null;
+		}
+	}
+
+	private void SetStatus(MusicSource source, string text)
+	{
+		statusText[source.Id] = text;
+
+		// The download runs off the main thread; the GUI does not.
+		capi.Event.EnqueueMainThreadTask(() =>
+		{
+			if (IsOpened())
+			{
+				SingleComposer?.GetDynamicText("vscfg_status_" + source.Id)?.SetNewText(text);
+			}
+		}, "vscfg-status");
+	}
+
 	public override void OnGuiOpened()
 	{
 		base.OnGuiOpened();
 
 		draftLoadGameMusic = configuration.LoadGameMusic;
-		draftLoadVintageSymphonyMusic = configuration.LoadVintageSymphonyMusic;
+		draftSourceEnabled.Clear();
+		foreach (var source in sources.Sources)
+		{
+			draftSourceEnabled[source.Id] = source.Enabled;
+		}
 
-		SingleComposer.GetSwitch(LoadVintageSymphonyMusicToggleKey).On = draftLoadVintageSymphonyMusic;
-		SingleComposer.GetSwitch(LoadGameMusicToggleKey).On = draftLoadGameMusic;
+		// Sources can appear between openings - someone may have edited sources.json.
+		page = 0;
+		SetupDialog();
 	}
 
 	public override void OnGuiClosed()
@@ -104,30 +274,27 @@ public class ConfigurationDialog : GuiDialog
 
 	private void Apply()
 	{
-		bool poolChanged = draftLoadGameMusic != configuration.LoadGameMusic
-		                   || draftLoadVintageSymphonyMusic != configuration.LoadVintageSymphonyMusic;
+		var changed = draftLoadGameMusic != configuration.LoadGameMusic;
 
-		if (!poolChanged)
+		foreach (var source in sources.Sources)
+		{
+			if (draftSourceEnabled.TryGetValue(source.Id, out var enabled) && enabled != source.Enabled)
+			{
+				source.Enabled = enabled;
+				changed = true;
+			}
+		}
+
+		if (!changed)
 		{
 			return;
 		}
 
 		configuration.LoadGameMusic = draftLoadGameMusic;
-		configuration.LoadVintageSymphonyMusic = draftLoadVintageSymphonyMusic;
 		configurationLoader.SaveConfiguration(configuration);
+		sources.Save();
 
 		VintageSymphony.MusicEngine?.ReloadTracks();
-	}
-
-	private bool OnOk()
-	{
-		TryClose();
-		return true;
-	}
-
-	private void OnTitleBarCloseClicked()
-	{
-		TryClose();
 	}
 
 	public override string ToggleKeyCombinationCode => "vintage-symphony-config";

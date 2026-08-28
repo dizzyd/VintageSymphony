@@ -256,9 +256,6 @@ public sealed class PackageModTask : FrostingTask<BuildContext>
 
 		// copy modinfo.json
 		context.CopyFile($"{projectDir}/modinfo.json", $"{buildDir}/modinfo.json");
-		context.EnsureDirectoryExists($"{buildDir}/assets/vintagesymphony/config/");
-		context.CopyFile($"{projectDir}/compatibility.json", $"{buildDir}/assets/vintagesymphony/config/compatibility.json");
-
 		// package mod
 		context.Zip(buildDir, $"{releasePath}/{context.ModName}_{context.AdjustVersionForFilename(context.ModVersion)}.zip");
 	}

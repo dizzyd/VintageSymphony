@@ -39,6 +39,6 @@ public class TrackFilter
             return configuration.LoadGameMusic;
         }
 
-        return configuration.LoadVintageSymphonyMusic && musicDomains.Contains(domain);
+        return musicDomains.Contains(domain);
     }
 }

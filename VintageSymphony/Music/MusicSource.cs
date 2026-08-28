@@ -26,5 +26,8 @@ public class MusicSource
 	/// </summary>
 	[JsonProperty] public string? Compatible { get; set; }
 
+	/// <summary>What is on disk, once something has been installed.</summary>
+	[JsonProperty] public string? Installed { get; set; }
+
 	public override string ToString() => $"{Id} ({Name})";
 }
