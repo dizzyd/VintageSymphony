@@ -18,18 +18,27 @@ public class AvailableRelease
 /// </summary>
 public class MusicSourceInstaller
 {
-	private static readonly HttpClient HttpClient = new();
+	private static readonly HttpClient Shared = NewClient();
+	private readonly HttpClient httpClient;
 	private readonly MusicSources sources;
 	private readonly ILogger logger;
 
-	public MusicSourceInstaller(MusicSources sources, ILogger logger)
+	/// <param name="httpClient">
+	/// Left out in normal use. A caller supplies one to reach somewhere the default
+	/// client cannot - a test serving a pack over loopback, for instance.
+	/// </param>
+	public MusicSourceInstaller(MusicSources sources, ILogger logger, HttpClient? httpClient = null)
 	{
 		this.sources = sources;
 		this.logger = logger;
-		if (!HttpClient.DefaultRequestHeaders.Contains("User-Agent"))
-		{
-			HttpClient.DefaultRequestHeaders.Add("User-Agent", "VintageSymphony");
-		}
+		this.httpClient = httpClient ?? Shared;
+	}
+
+	private static HttpClient NewClient()
+	{
+		var client = new HttpClient();
+		client.DefaultRequestHeaders.Add("User-Agent", "VintageSymphony");
+		return client;
 	}
 
 	/// <summary>
@@ -96,7 +105,7 @@ public class MusicSourceInstaller
 	private async Task<long> SizeOfAsync(string url)
 	{
 		using var request = new HttpRequestMessage(HttpMethod.Head, url);
-		var response = await HttpClient.SendAsync(request);
+		var response = await httpClient.SendAsync(request);
 		return response.Content.Headers.ContentLength ?? 0;
 	}
 
@@ -155,7 +164,7 @@ public class MusicSourceInstaller
 	private async Task DownloadAsync(string url, string destination, Action<float> onProgress,
 		CancellationToken cancellation)
 	{
-		using var response = await HttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellation);
+		using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellation);
 		response.EnsureSuccessStatusCode();
 
 		var total = response.Content.Headers.ContentLength ?? 0;
@@ -219,6 +228,13 @@ public class MusicSourceInstaller
 	{
 		var normalized = entryPath.Replace('\\', '/');
 		var parts = normalized.Split('/');
+
+		// An entry that tries to climb out is not a track that happens to be oddly named:
+		// drop it rather than keeping whatever it was pointing at.
+		if (parts.Any(p => p == ".."))
+		{
+			return null;
+		}
 
 		var musicAt = Array.FindIndex(parts, p => p.Equals(MusicSources.MusicFolder, StringComparison.OrdinalIgnoreCase));
 		if (musicAt >= 0)
