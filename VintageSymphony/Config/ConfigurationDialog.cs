@@ -65,14 +65,17 @@ public class ConfigurationDialog : GuiDialog
 		var dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
 
 		page = Math.Clamp(page, 0, PageCount - 1);
-		var rowsOnPage = Math.Max(1, PageOfSources().Count());
+
+		// Sized for a full page rather than for this page, so the dialog does not jump
+		// about as pages are turned - but still shrinks to fit when there are only a
+		// couple of sources.
+		var rowsShown = Math.Max(1, Math.Min(sources.Sources.Count, RowsPerPage));
 		var listTop = 40;
-		var listHeight = rowsOnPage * RowHeight;
+		var listHeight = rowsShown * RowHeight;
 
 		var pagerY = listTop + listHeight + 6;
 		var showPager = PageCount > 1;
 		var addY = pagerY + (showPager ? 42 : 12);
-		var boundsNote = ElementBounds.Fixed(10, addY + 38, DialogWidth - 20, 30);
 
 		// Element coordinates start at the frame's left edge, not inside its padding, so
 		// the usable right edge is the dialog width plus one padding.
@@ -81,7 +84,10 @@ public class ConfigurationDialog : GuiDialog
 		var boundsOk = ElementBounds.Fixed(okX, addY, okWidth, 30);
 
 		// Sizing child: the background fits itself around what the dialog holds
-		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, addY + 62);
+		// The sizing child wants a height, not the coordinate its bottom sits at - getting
+		// that wrong left the background running on well past the buttons.
+		var contentBottom = addY + 32;
+		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, contentBottom - listTop);
 
 		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
 		bgBounds.BothSizing = ElementSizing.FitToChildren;
@@ -112,8 +118,6 @@ public class ConfigurationDialog : GuiDialog
 			.AddSmallButton("Add a source...", () => { addSourceDialog.TryOpen(); return true; },
 				ElementBounds.Fixed(10, addY, 160, 30), EnumButtonStyle.Normal, AddSourceKey)
 			.AddSmallButton("Done", () => TryClose(), boundsOk, EnumButtonStyle.Normal, OkButtonKey)
-			.AddStaticText("Changes apply when this closes.", CairoFont.WhiteDetailText(),
-				EnumTextOrientation.Left, boundsNote)
 			.Compose();
 
 		RestoreSwitchStates();

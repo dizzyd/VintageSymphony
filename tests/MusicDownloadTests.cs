@@ -340,6 +340,9 @@ namespace VintageSymphony.Tests
             dialog.TryOpen();
             await Frames.Wait(5);
 
+            // The list is paged, and a new source lands at the end of it.
+            await TurnToPageWith(dialog, "vscfg_rm_" + id);
+
             try
             {
                 Press(dialog, "vscfg_rm_" + id);
@@ -358,6 +361,29 @@ namespace VintageSymphony.Tests
                 Sources.Save();
                 Delete(Sources.DirectoryOf(source));
             }
+        }
+
+        /// <summary>
+        /// Page forward until the wanted element is on screen. With a handful of sources
+        /// it is on the first page; with twenty it is not, and a test that assumed
+        /// otherwise would only fail for whoever had a long list.
+        /// </summary>
+        static async Task TurnToPageWith(GuiDialog dialog, string key)
+        {
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                if (dialog.SingleComposer.GetButton(key) != null)
+                {
+                    return;
+                }
+
+                var next = dialog.SingleComposer.GetButton("vscfg_next");
+                Assert.NotNull(next, "ran out of pages looking for " + key);
+                Press(dialog, "vscfg_next");
+                await Frames.Wait(2);
+            }
+
+            Assert.Fail("never found " + key);
         }
 
         static void Press(GuiDialog dialog, string key)
