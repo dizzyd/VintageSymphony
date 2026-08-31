@@ -60,24 +60,49 @@ public class MusicSources
 	}
 
 	/// <summary>
-	/// The same, for a source that arrived after the game had started.
+	/// The same, for a source that arrived - or changed - after the game had started.
 	///
 	/// AddModOrigin only queues an origin into CustomModOrigins, which the asset manager
-	/// folds into Origins once during startup - so a late one would never be looked at.
-	/// Adding it to Origins and reloading the music category is what makes a source that
-	/// was just downloaded resolve without restarting the game.
+	/// folds into Origins once during startup, so a late one would never be looked at.
+	/// The reload matters just as much on a re-install, where the origin is already there
+	/// but the files behind it have been replaced: without it the asset manager keeps
+	/// serving what it cached, and an update appears to do nothing.
 	/// </summary>
 	public void RegisterOriginNow(ICoreClientAPI capi, MusicSource source)
 	{
 		var path = DirectoryOf(source);
-		if (capi.Assets.Origins.Any(o => o is PathOrigin p && p.Domain == source.Id && p.OriginPath.TrimEnd(Path.DirectorySeparatorChar) == path))
+		var known = capi.Assets.Origins.Any(o =>
+			o is PathOrigin p && p.Domain == source.Id
+			&& p.OriginPath.TrimEnd(Path.DirectorySeparatorChar) == path);
+
+		if (!known)
 		{
-			return;
+			capi.Assets.Origins.Add(new PathOrigin(source.Id, path));
 		}
 
-		capi.Assets.Origins.Add(new PathOrigin(source.Id, path));
 		capi.Assets.Reload(AssetCategory.music);
 		logger.Notification("Music source '{0}' is now available from {1}", source.Id, path);
+	}
+
+	/// <summary>Forget a source and take its files with it.</summary>
+	public void Remove(MusicSource source)
+	{
+		Sources.Remove(source);
+		Save();
+
+		var directory = DirectoryOf(source);
+		try
+		{
+			if (Directory.Exists(directory))
+			{
+				Directory.Delete(directory, true);
+				logger.Notification("Removed music source '{0}' and deleted {1}", source.Id, directory);
+			}
+		}
+		catch (Exception e)
+		{
+			logger.Error("Removed '{0}' but could not delete {1}: {2}", source.Id, directory, e.Message);
+		}
 	}
 
 	public void Load()

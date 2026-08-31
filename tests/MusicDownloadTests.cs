@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Vintagestory.API.Client;
 using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 using VS = VintageSymphony.VintageSymphony;
@@ -72,7 +73,9 @@ namespace VintageSymphony.Tests
                 Assert.True(File.Exists(Path.Combine(musicPath, "fixture.ogg")), "the track was unpacked");
                 Assert.True(File.Exists(Path.Combine(musicPath, Music.TrackManifest.FileName)),
                     "the manifest came with it");
-                Assert.Equal("yes", source.Installed, "the install was recorded");
+                // This fixture publishes no version, so whether it is installed is a
+                // question for the disk rather than for the recorded version.
+                Assert.True(Sources.HasMusicOnDisk(source), "the source counts as installed");
                 Assert.Greater(progress.Count, 0, "progress was reported");
 
                 // An entry that tries to climb out is dropped, not written somewhere else
@@ -172,6 +175,131 @@ namespace VintageSymphony.Tests
                 .GetValue(VS.MusicEngine)).Tracks;
 
         static bool PoolHas(string domain) => Pool().Any(t => t.Location?.Domain == domain);
+
+
+        /// <summary>
+        /// Pressing Update on something already installed replaces it. The origin is
+        /// already registered by then, so the reload has to happen anyway - without it the
+        /// files change on disk while the asset manager keeps serving what it cached, and
+        /// the update looks like it did nothing.
+        /// </summary>
+        [VsTest(TimeoutMs = 180000), RequiresClient]
+        public async Task UpdatingAnInstalledSourceReplacesWhatIsPlaying()
+        {
+            const string id = "vsupdatetest";
+            var served = Path.Combine(Path.GetTempPath(), "vs-update-test");
+            Directory.CreateDirectory(served);
+            var archive = Path.Combine(served, "pack.zip");
+
+            using var listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{Port + 2}/");
+            listener.Start();
+            using var serving = new CancellationTokenSource();
+            var server = ServeAsync(listener, archive, serving.Token);
+            using var direct = new HttpClient(new HttpClientHandler { UseProxy = false });
+
+            var source = new Music.MusicSource
+            {
+                Id = id, Name = "update test", Enabled = true,
+                Url = $"http://127.0.0.1:{Port + 2}/pack.zip"
+            };
+
+            try
+            {
+                Sources.Sources.Add(source);
+                var installer = new Music.MusicSourceInstaller(Sources, Capi.Logger, direct);
+
+                await InstallVersion(installer, source, archive, "Version One");
+                await Until(() => TitleOf(id) == "Version One", 300, "the first version plays");
+
+                await InstallVersion(installer, source, archive, "Version Two");
+                await Until(() => TitleOf(id) == "Version Two", 300,
+                    "the update replaced it without a restart");
+
+                Log("pool went from Version One to " + TitleOf(id));
+            }
+            finally
+            {
+                serving.Cancel();
+                listener.Stop();
+                Sources.Sources.RemoveAll(s => s.Id == id);
+                Sources.Save();
+                Delete(Sources.DirectoryOf(source));
+                Delete(served);
+                VS.MusicEngine.ReloadTracks();
+            }
+        }
+
+        static async Task InstallVersion(Music.MusicSourceInstaller installer, Music.MusicSource source,
+            string archive, string title)
+        {
+            BuildFixtureArchive(archive, "musicconfig.json",
+                "{ \"tracks\": [ { \"$type\": \"VintageSymphony.Engine.MusicTrack, VintageSymphony\", " +
+                $"\"file\": \"fixture\", \"situation\": \"fight\", \"title\": \"{title}\", " +
+                "\"minSunLight\": 0 } ] }");
+
+            var release = await installer.CheckAsync(source);
+            Assert.NotNull(release, "the source offered " + title);
+            await installer.InstallAsync(source, release, _ => { }, CancellationToken.None);
+            await OnClient();
+
+            Sources.RegisterOriginNow(Capi, source);
+            VS.MusicEngine.ReloadTracks();
+        }
+
+        static string TitleOf(string domain) =>
+            Pool().FirstOrDefault(t => t.Location?.Domain == domain)?.Title;
+
+        /// <summary>
+        /// Removing a source takes its music with it, so it asks first - one press arms
+        /// the button, a second one goes through with it.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task RemovingASourceTakesTwoPressesAndDeletesItsFiles()
+        {
+            const string id = "vsremovetest";
+            await OnClient();
+
+            var source = new Music.MusicSource { Id = id, Name = "remove test", Enabled = true };
+            var musicPath = Sources.MusicPathOf(source);
+            Directory.CreateDirectory(musicPath);
+            File.WriteAllText(Path.Combine(musicPath, "placeholder.txt"), "music would live here");
+            Sources.Sources.Add(source);
+
+            var dialog = VS.ConfigurationDialog;
+            dialog.TryOpen();
+            await Frames.Wait(5);
+
+            try
+            {
+                Press(dialog, "vscfg_rm_" + id);
+                Assert.Equal("Sure?", dialog.SingleComposer.GetButton("vscfg_rm_" + id).Text,
+                    "the first press only arms it");
+                Assert.True(Sources.Sources.Any(s => s.Id == id), "and removes nothing");
+
+                Press(dialog, "vscfg_rm_" + id);
+                Assert.False(Sources.Sources.Any(s => s.Id == id), "the second press removes it");
+                Assert.False(Directory.Exists(Sources.DirectoryOf(source)), "and deletes its files");
+            }
+            finally
+            {
+                dialog.TryClose();
+                Sources.Sources.RemoveAll(s => s.Id == id);
+                Sources.Save();
+                Delete(Sources.DirectoryOf(source));
+            }
+        }
+
+        static void Press(GuiDialog dialog, string key)
+        {
+            var button = dialog.SingleComposer.GetButton(key);
+            Assert.NotNull(button, "button " + key);
+            var at = new MouseEvent(
+                (int)(button.Bounds.absX + 10), (int)(button.Bounds.absY + 10),
+                Vintagestory.API.Common.EnumMouseButton.Left, 0);
+            button.OnMouseDownOnElement(Capi, at);
+            button.OnMouseUpOnElement(Capi, at);
+        }
 
         /// <summary>
         /// A pack shaped like a mod, plus an entry that tries to escape the folder it is

@@ -16,7 +16,7 @@ namespace VintageSymphony.Config;
 /// </summary>
 public class ConfigurationDialog : GuiDialog
 {
-	private const int DialogWidth = 500;
+	private const int DialogWidth = 560;
 	private const int RowHeight = 46;
 	private const int RowsPerPage = 6;
 
@@ -37,6 +37,9 @@ public class ConfigurationDialog : GuiDialog
 	private readonly Dictionary<string, string> statusText = new();
 
 	private string busySourceId;
+
+	/// <summary>Removing deletes a folder, so it takes two presses rather than one.</summary>
+	private string pendingRemoveId;
 	private int page;
 
 	public ConfigurationDialog(ICoreClientAPI api, Configuration configuration,
@@ -53,6 +56,7 @@ public class ConfigurationDialog : GuiDialog
 
 	private static string SwitchKey(MusicSource source) => "vscfg_src_" + source.Id;
 	private static string ButtonKey(MusicSource source) => "vscfg_get_" + source.Id;
+	private static string RemoveKey(MusicSource source) => "vscfg_rm_" + source.Id;
 
 	private int PageCount => Math.Max(1, (sources.Sources.Count + RowsPerPage - 1) / RowsPerPage);
 
@@ -68,14 +72,16 @@ public class ConfigurationDialog : GuiDialog
 		var pagerY = listTop + listHeight + 6;
 		var showPager = PageCount > 1;
 		var addY = pagerY + (showPager ? 42 : 12);
-		var boundsNote = ElementBounds.Fixed(10, addY + 40, DialogWidth - 20, 30);
+		var boundsNote = ElementBounds.Fixed(10, addY + 38, DialogWidth - 20, 30);
 
+		// Element coordinates start at the frame's left edge, not inside its padding, so
+		// the usable right edge is the dialog width plus one padding.
 		const int okWidth = 120;
-		var okX = DialogWidth / 2 + GuiStyle.ElementToDialogPadding - okWidth / 2;
-		var boundsOk = ElementBounds.Fixed(okX, addY + 76, okWidth, 30);
+		var okX = DialogWidth + GuiStyle.ElementToDialogPadding - okWidth - 10;
+		var boundsOk = ElementBounds.Fixed(okX, addY, okWidth, 30);
 
 		// Sizing child: the background fits itself around what the dialog holds
-		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, addY + 76);
+		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, addY + 62);
 
 		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
 		bgBounds.BothSizing = ElementSizing.FitToChildren;
@@ -104,10 +110,10 @@ public class ConfigurationDialog : GuiDialog
 
 		SingleComposer
 			.AddSmallButton("Add a source...", () => { addSourceDialog.TryOpen(); return true; },
-				ElementBounds.Fixed(10, addY, 160, 28), EnumButtonStyle.Normal, AddSourceKey)
+				ElementBounds.Fixed(10, addY, 160, 30), EnumButtonStyle.Normal, AddSourceKey)
+			.AddSmallButton("Done", () => TryClose(), boundsOk, EnumButtonStyle.Normal, OkButtonKey)
 			.AddStaticText("Changes apply when this closes.", CairoFont.WhiteDetailText(),
 				EnumTextOrientation.Left, boundsNote)
-			.AddSmallButton("OK", () => TryClose(), boundsOk, EnumButtonStyle.Normal, OkButtonKey)
 			.Compose();
 
 		RestoreSwitchStates();
@@ -151,9 +157,9 @@ public class ConfigurationDialog : GuiDialog
 					ElementBounds.Fixed(6, y + 6, 10, 30), SwitchKey(source))
 				.AddStaticText(source.Name.Length > 0 ? source.Name : source.Id,
 					CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
-					ElementBounds.Fixed(46, y + 4, 280, 24))
+					ElementBounds.Fixed(46, y + 4, 300, 24))
 				.AddDynamicText(StatusOf(source), CairoFont.WhiteDetailText(),
-					ElementBounds.Fixed(46, y + 24, 280, 20), "vscfg_status_" + source.Id);
+					ElementBounds.Fixed(46, y + 24, 300, 20), "vscfg_status_" + source.Id);
 
 			// The game's own music comes with the game, and a source with nowhere to
 			// download from is somebody's own folder: neither has anything to press.
@@ -164,7 +170,16 @@ public class ConfigurationDialog : GuiDialog
 				var label = sources.HasMusicOnDisk(source) ? "Update" : "Download";
 				var captured = source;
 				SingleComposer.AddSmallButton(label, () => OnDownload(captured),
-					ElementBounds.Fixed(340, y + 8, 120, 28), EnumButtonStyle.Normal, ButtonKey(source));
+					ElementBounds.Fixed(356, y + 8, 120, 28), EnumButtonStyle.Normal, ButtonKey(source));
+			}
+
+			// The game's own music cannot be removed - it would only come back.
+			if (!MusicSources.IsBuiltIn(source) && !isBusy)
+			{
+				var captured = source;
+				var removing = source.Id == pendingRemoveId;
+				SingleComposer.AddSmallButton(removing ? "Sure?" : "Remove", () => OnRemove(captured),
+					ElementBounds.Fixed(486, y + 8, 64, 28), EnumButtonStyle.Normal, RemoveKey(source));
 			}
 
 			row++;
@@ -202,6 +217,29 @@ public class ConfigurationDialog : GuiDialog
 		}
 
 		return source.Installed == null ? "installed" : "installed " + source.Installed;
+	}
+
+	/// <summary>
+	/// First press arms it, second one does it. Removing takes the source's music with it,
+	/// which is not something to do on a stray click.
+	/// </summary>
+	private bool OnRemove(MusicSource source)
+	{
+		if (pendingRemoveId != source.Id)
+		{
+			pendingRemoveId = source.Id;
+			SetupDialog();
+			return true;
+		}
+
+		pendingRemoveId = null;
+		draftSourceEnabled.Remove(source.Id);
+		statusText.Remove(source.Id);
+		sources.Remove(source);
+
+		VintageSymphony.MusicEngine?.ReloadTracks();
+		SetupDialog();
+		return true;
 	}
 
 	private bool OnDownload(MusicSource source)
@@ -289,6 +327,7 @@ public class ConfigurationDialog : GuiDialog
 	{
 		base.OnGuiOpened();
 
+		pendingRemoveId = null;
 		draftSourceEnabled.Clear();
 		foreach (var source in sources.Sources)
 		{

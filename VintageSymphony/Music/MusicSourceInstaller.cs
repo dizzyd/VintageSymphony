@@ -145,7 +145,9 @@ public class MusicSourceInstaller
 			}
 
 			Directory.Move(staging, target);
-			source.Installed = release.Version?.ToString() ?? "yes";
+			// Null when the source does not publish versions - whether it is installed is
+			// a question for the disk, not for this.
+			source.Installed = release.Version?.ToString();
 			sources.Save();
 
 			logger.Notification("Installed music source '{0}'{1}", source.Id,
