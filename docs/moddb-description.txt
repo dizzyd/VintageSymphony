@@ -55,6 +55,18 @@ original author's release page.
 The music lives in ModData/vintagesymphonyforked/sources/ inside your Vintage Story data
 folder, one folder per source.
 
+== About the music ==
+
+The pack above is royalty free, and every track in it is credited at the bottom of this page.
+Anything else you point this mod at is on you: check what its licence asks for, honour it, and keep
+the credits with the files.
+
+Someone wrote that music. They recorded it, mixed it, and then decided you could have it —
+that is a gift, not an absence of an owner. If you can buy their work, buy it. If you cannot, credit
+them by name, link them where people will see it, and tell someone else about them. Please do not
+scrape tracks into a pack and pass them around; the reason there is so much good music free to use is
+that musicians keep choosing to make it so, and that only holds while it is treated well.
+
 == Adding your own music ==
 
 Make a folder for it under ModData/vintagesymphonyforked/sources/ — say
