@@ -17,6 +17,13 @@ namespace VintageSymphony.Config;
 public class ConfigurationDialog : GuiDialog
 {
 	private const int DialogWidth = 560;
+
+	/// <summary>
+	/// Even space at every edge. Children are positioned from the frame's left edge while
+	/// the frame is the content box plus a padding on each side, so the room to the right
+	/// and below is that padding twice over unless it is subtracted back out by hand.
+	/// </summary>
+	private const int Margin = 12;
 	private const int RowHeight = 46;
 	private const int RowsPerPage = 6;
 
@@ -76,18 +83,18 @@ public class ConfigurationDialog : GuiDialog
 		var pagerY = listTop + listHeight + 6;
 		var showPager = PageCount > 1;
 		var addY = pagerY + (showPager ? 42 : 12);
+		var padding = (int)GuiStyle.ElementToDialogPadding;
+		var usableWidth = DialogWidth + 2 * padding;
 
-		// Element coordinates start at the frame's left edge, not inside its padding, so
-		// the usable right edge is the dialog width plus one padding.
 		const int okWidth = 120;
-		var okX = DialogWidth + GuiStyle.ElementToDialogPadding - okWidth - 10;
-		var boundsOk = ElementBounds.Fixed(okX, addY, okWidth, 30);
+		var boundsOk = ElementBounds.Fixed(usableWidth - Margin - okWidth, addY, okWidth, 30);
 
 		// Sizing child: the background fits itself around what the dialog holds
-		// The sizing child wants a height, not the coordinate its bottom sits at - getting
-		// that wrong left the background running on well past the buttons.
-		var contentBottom = addY + 32;
-		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, contentBottom - listTop);
+		// The sizing child wants a height, not the coordinate its bottom sits at. It also
+		// stops short of the buttons, because the frame will add a padding below them
+		// whether or not anything asked for it.
+		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth,
+			addY + 30 + Margin - listTop - 2 * padding);
 
 		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
 		bgBounds.BothSizing = ElementSizing.FitToChildren;
@@ -106,7 +113,7 @@ public class ConfigurationDialog : GuiDialog
 		if (showPager)
 		{
 			SingleComposer
-				.AddSmallButton("<", () => TurnPage(-1), ElementBounds.Fixed(10, pagerY, 40, 28),
+				.AddSmallButton("<", () => TurnPage(-1), ElementBounds.Fixed(Margin, pagerY, 40, 28),
 					EnumButtonStyle.Normal, PrevKey)
 				.AddStaticText($"Page {page + 1} of {PageCount}", CairoFont.WhiteDetailText(),
 					EnumTextOrientation.Center, ElementBounds.Fixed(60, pagerY + 5, 120, 24))
@@ -116,7 +123,7 @@ public class ConfigurationDialog : GuiDialog
 
 		SingleComposer
 			.AddSmallButton("Add a source...", () => { addSourceDialog.TryOpen(); return true; },
-				ElementBounds.Fixed(10, addY, 160, 30), EnumButtonStyle.Normal, AddSourceKey)
+				ElementBounds.Fixed(Margin, addY, 160, 30), EnumButtonStyle.Normal, AddSourceKey)
 			.AddSmallButton("Done", () => TryClose(), boundsOk, EnumButtonStyle.Normal, OkButtonKey)
 			.Compose();
 
@@ -150,6 +157,15 @@ public class ConfigurationDialog : GuiDialog
 
 	private void AddSourceRows()
 	{
+		var padding = (int)GuiStyle.ElementToDialogPadding;
+		var usableWidth = DialogWidth + 2 * padding;
+		// Wide enough for "Remove" without the button growing to fit, and for "Sure?"
+		// without the right edge shifting when it arms.
+		const int removeWidth = 80;
+		const int getWidth = 120;
+		var removeX = usableWidth - Margin - removeWidth;
+		var getX = removeX - 10 - getWidth;
+
 		var row = 0;
 		foreach (var source in PageOfSources())
 		{
@@ -158,12 +174,12 @@ public class ConfigurationDialog : GuiDialog
 
 			SingleComposer
 				.AddSwitch(state => draftSourceEnabled[source.Id] = state,
-					ElementBounds.Fixed(6, y + 6, 10, 30), SwitchKey(source))
+					ElementBounds.Fixed(Margin, y + 6, 10, 30), SwitchKey(source))
 				.AddStaticText(source.Name.Length > 0 ? source.Name : source.Id,
 					CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
-					ElementBounds.Fixed(46, y + 4, 300, 24))
+					ElementBounds.Fixed(46, y + 4, getX - 56, 24))
 				.AddDynamicText(StatusOf(source), CairoFont.WhiteDetailText(),
-					ElementBounds.Fixed(46, y + 24, 300, 20), "vscfg_status_" + source.Id);
+					ElementBounds.Fixed(46, y + 24, getX - 56, 20), "vscfg_status_" + source.Id);
 
 			// The game's own music comes with the game, and a source with nowhere to
 			// download from is somebody's own folder: neither has anything to press.
@@ -174,7 +190,7 @@ public class ConfigurationDialog : GuiDialog
 				var label = sources.HasMusicOnDisk(source) ? "Update" : "Download";
 				var captured = source;
 				SingleComposer.AddSmallButton(label, () => OnDownload(captured),
-					ElementBounds.Fixed(356, y + 8, 120, 28), EnumButtonStyle.Normal, ButtonKey(source));
+					ElementBounds.Fixed(getX, y + 8, getWidth, 28), EnumButtonStyle.Normal, ButtonKey(source));
 			}
 
 			// The game's own music cannot be removed - it would only come back.
@@ -183,7 +199,7 @@ public class ConfigurationDialog : GuiDialog
 				var captured = source;
 				var removing = source.Id == pendingRemoveId;
 				SingleComposer.AddSmallButton(removing ? "Sure?" : "Remove", () => OnRemove(captured),
-					ElementBounds.Fixed(486, y + 8, 64, 28), EnumButtonStyle.Normal, RemoveKey(source));
+					ElementBounds.Fixed(removeX, y + 8, removeWidth, 28), EnumButtonStyle.Normal, RemoveKey(source));
 			}
 
 			row++;
