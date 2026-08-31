@@ -52,12 +52,12 @@ Install the mod, load a world, and open the config with .music config. Press
 Download next to "Vintage Symphony music". It is about 200MB and comes from the
 original author's release page.
 
-The music lives in ModData/vintagesymphony/sources/ inside your Vintage Story data
+The music lives in ModData/vintagesymphonyforked/sources/ inside your Vintage Story data
 folder, one folder per source.
 
 == Adding your own music ==
 
-Make a folder for it under ModData/vintagesymphony/sources/ — say
+Make a folder for it under ModData/vintagesymphonyforked/sources/ — say
 my-tunes/music/ — and put your .ogg files in it. Start the game once and the
 mod writes a tracks.json next to them listing everything it found. Edit it to say when each
 track should play:

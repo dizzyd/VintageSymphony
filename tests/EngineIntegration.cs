@@ -21,7 +21,8 @@ namespace VintageSymphony.Tests
     /// </summary>
     public class EngineIntegration
     {
-        const string ModId = "vintagesymphony";
+        /// <summary>Read rather than restated, so a rename cannot leave this asserting nothing.</summary>
+        static string ModId => VS.Instance.Mod.Info.ModID;
 
         static MethodInfo VanillaTick =>
             typeof(SystemMusicEngine).GetMethod("OnEverySecond",

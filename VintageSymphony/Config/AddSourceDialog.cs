@@ -70,7 +70,7 @@ public class AddSourceDialog : GuiDialog
 		bgBounds.WithChildren(sizing);
 
 		SingleComposer?.Dispose();
-		SingleComposer = capi.Gui.CreateCompo("vintagesymphony_addsource", dialogBounds)
+		SingleComposer = capi.Gui.CreateCompo("vintagesymphonyforked_addsource", dialogBounds)
 			.AddShadedDialogBG(bgBounds)
 			.AddDialogTitleBar("Add a music source", () => TryClose())
 			.AddStaticText("Name", CairoFont.WhiteDetailText(), EnumTextOrientation.Left,

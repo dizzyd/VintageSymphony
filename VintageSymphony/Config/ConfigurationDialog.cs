@@ -101,7 +101,7 @@ public class ConfigurationDialog : GuiDialog
 		bgBounds.WithChildren(sizing);
 
 		SingleComposer?.Dispose();
-		SingleComposer = capi.Gui.CreateCompo("vintagesymphony_configuration", dialogBounds)
+		SingleComposer = capi.Gui.CreateCompo("vintagesymphonyforked_configuration", dialogBounds)
 			.AddShadedDialogBG(bgBounds)
 			.AddDialogTitleBar("Vintage Symphony configuration", () => TryClose());
 
@@ -394,5 +394,5 @@ public class ConfigurationDialog : GuiDialog
 		VintageSymphony.MusicEngine?.ReloadTracks();
 	}
 
-	public override string ToggleKeyCombinationCode => "vintage-symphony-config";
+	public override string ToggleKeyCombinationCode => "vintage-symphony-forked-config";
 }

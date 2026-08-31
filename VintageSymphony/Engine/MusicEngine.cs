@@ -199,15 +199,29 @@ public class MusicEngine : BaseModSystem
 	{
 		var parts = new List<string>();
 
+		// Only what actually contributed. The game's own music is a source like any other
+		// now, so it is counted once, here, rather than again on the end - and a long list
+		// of sources with nothing installed says nothing worth reading.
 		foreach (var source in VintageSymphony.MusicSources.Enabled)
 		{
 			var count = fromGame.Count(t => t is SurfaceMusicTrack s && s.Location?.Domain == source.Id)
 			            + local.Count(t => t.Location?.Domain == source.Id);
-			parts.Add($"{count} {source.Id}");
+			if (count > 0)
+			{
+				parts.Add($"{count} {source.Id}");
+			}
 		}
 
-		parts.Add($"{fromGame.Count(t => t is SurfaceMusicTrack s && s.Location?.Domain == GlobalConstants.DefaultDomain)} Vintage Story");
-		parts.Add($"{fromGame.Count(t => t is CaveMusicTrack)} cave");
+		var cave = fromGame.Count(t => t is CaveMusicTrack);
+		if (cave > 0)
+		{
+			parts.Add($"{cave} cave");
+		}
+
+		if (parts.Count == 0)
+		{
+			parts.Add("nothing");
+		}
 
 		Logger.Notification("Loaded {0} music tracks ({1} offered by the game): {2}",
 			musicCurator.Tracks.Count, available, string.Join(", ", parts));

@@ -16,7 +16,11 @@ public class MusicSources
 	public const string SourcesFolder = "sources";
 	public const string MusicFolder = "music";
 
-	/// <summary>The music that ships as the default experience.</summary>
+	/// <summary>
+	/// The music that ships as the default experience. This is the asset domain its
+	/// tracks are addressed under - the domain belongs to the music, not to this mod, so
+	/// it stays as it is however the mod itself is named.
+	/// </summary>
 	public const string DefaultSourceId = "vintagesymphony";
 
 	/// <summary>

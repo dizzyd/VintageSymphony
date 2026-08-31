@@ -75,8 +75,9 @@ namespace VintageSymphony.Tests
             await Ticks(10);
 
             // A wall two blocks east, spanning the plot so the drifter behind it cannot
-            // simply walk around and turn the test into a coin toss.
-            World.Fill(P(10, 1, 0), P(10, 4, 15), "game:rock-granite");
+            // walk around it, and tall enough that it cannot climb over either - drifters
+            // have canClimb, and a four block wall let one over mid-test.
+            World.Fill(P(10, 1, 0), P(10, 10, 15), "game:rock-granite");
             var hidden = World.SpawnEntity("game:drifter-normal", P(11, 1, 8));
 
             // And one further away in the open.
