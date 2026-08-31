@@ -55,9 +55,12 @@ public class MusicSourceInstaller
 
 		try
 		{
-			if (source.Url.Contains("api.github.com"))
+			// A releases endpoint lists versions to choose between; anything else is taken
+			// at face value as a zip. Matching on the path as well as the host means a
+			// mirror or a GitHub Enterprise host works the same way.
+			if (source.Url.Contains("api.github.com") || source.Url.TrimEnd('/').EndsWith("/releases"))
 			{
-				var releases = await new GitHubReleaseFetcher().GetAllReleasesAsync(source.Url);
+				var releases = await new GitHubReleaseFetcher(httpClient).GetAllReleasesAsync(source.Url);
 				var release = releases.FirstOrDefault(r => IsCompatible(source, r.Version));
 				if (release == null)
 				{
@@ -84,6 +87,18 @@ public class MusicSourceInstaller
 			logger.Error("Could not reach '{0}': {1}", source.Id, e.Message);
 			return null;
 		}
+	}
+
+	/// <summary>
+	/// Whether what is on offer is what is already installed. Only a source that publishes
+	/// versions can say - for the rest, asking again means fetching again, because there
+	/// is nothing to compare.
+	/// </summary>
+	public bool IsUpToDate(MusicSource source, AvailableRelease release)
+	{
+		return release.Version != null
+		       && source.Installed == release.Version.ToString()
+		       && sources.HasMusicOnDisk(source);
 	}
 
 	/// <summary>

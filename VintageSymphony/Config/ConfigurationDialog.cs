@@ -269,6 +269,12 @@ public class ConfigurationDialog : GuiDialog
 				return;
 			}
 
+			if (installer.IsUpToDate(source, release))
+			{
+				SetStatus(source, $"already up to date ({source.Installed})");
+				return;
+			}
+
 			var size = release.SizeBytes > 0 ? $" ({release.SizeBytes / 1024 / 1024} MB)" : "";
 			SetStatus(source, $"downloading{size}…");
 

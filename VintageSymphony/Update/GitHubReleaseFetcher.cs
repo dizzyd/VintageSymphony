@@ -4,13 +4,27 @@ namespace VintageSymphony.Update;
 
 public class GitHubReleaseFetcher
 {
-	private static readonly HttpClient httpClient = new();
+	private static readonly HttpClient SharedClient = new();
+	private readonly HttpClient httpClient;
+
+	/// <param name="httpClient">
+	/// Left out in normal use; supplied when the caller has a client that can reach
+	/// somewhere the default one cannot.
+	/// </param>
+	public GitHubReleaseFetcher(HttpClient? httpClient = null)
+	{
+		this.httpClient = httpClient ?? SharedClient;
+	}
+
 	
 	public async Task<IEnumerable<Release>> GetAllReleasesAsync(string apiUrl)
 	{
 		try
 		{
-			httpClient.DefaultRequestHeaders.Add("User-Agent", "C# App");
+			if (!httpClient.DefaultRequestHeaders.Contains("User-Agent"))
+			{
+				httpClient.DefaultRequestHeaders.Add("User-Agent", "VintageSymphony");
+			}
 
 			HttpResponseMessage response = await httpClient.GetAsync(apiUrl);
 			response.EnsureSuccessStatusCode();

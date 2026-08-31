@@ -177,6 +177,76 @@ namespace VintageSymphony.Tests
         static bool PoolHas(string domain) => Pool().Any(t => t.Location?.Domain == domain);
 
 
+
+        /// <summary>
+        /// Pressing Update when the newest release is the one already installed does not
+        /// download it again. A source that publishes versions is the only kind that can
+        /// know; the rest have nothing to compare and fetch every time.
+        /// </summary>
+        [VsTest(TimeoutMs = 180000), RequiresClient]
+        public async Task UpdateDoesNotRefetchAVersionAlreadyInstalled()
+        {
+            const string id = "vsuptodatetest";
+            var port = Port + 3;
+            var served = Path.Combine(Path.GetTempPath(), "vs-uptodate-test");
+            Directory.CreateDirectory(served);
+            var archive = Path.Combine(served, "pack.zip");
+            BuildFixtureArchive(archive, "musicconfig.json",
+                "{ \"tracks\": [ { \"$type\": \"VintageSymphony.Engine.MusicTrack, VintageSymphony\", " +
+                "\"file\": \"fixture\", \"situation\": \"fight\", \"minSunLight\": 0 } ] }");
+
+            var releases = "[ { \"tag_name\": \"v1.0.0\", \"assets\": [ { " +
+                           $"\"browser_download_url\": \"http://127.0.0.1:{port}/pack.zip\", " +
+                           "\"name\": \"pack.zip\" } ] } ]";
+
+            var fetches = 0;
+            using var listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+            listener.Start();
+            using var serving = new CancellationTokenSource();
+            var server = ServeAsync(listener, archive, serving.Token, releases, () => fetches++);
+            using var direct = new HttpClient(new HttpClientHandler { UseProxy = false });
+
+            var source = new Music.MusicSource
+            {
+                Id = id, Name = "up to date test", Enabled = true,
+                Url = $"http://127.0.0.1:{port}/repos/someone/pack/releases"
+            };
+
+            try
+            {
+                Sources.Sources.Add(source);
+                var installer = new Music.MusicSourceInstaller(Sources, Capi.Logger, direct);
+
+                var first = await installer.CheckAsync(source);
+                Assert.NotNull(first, "the releases listing was read");
+                Assert.False(installer.IsUpToDate(source, first), "nothing is installed yet");
+                await installer.InstallAsync(source, first, _ => { }, CancellationToken.None);
+                await OnClient();
+
+                Assert.Equal("1.0.0", source.Installed, "the version was recorded");
+                Assert.Equal(1, fetches, "the pack was downloaded once");
+
+                // Press Update again with the same release on offer.
+                var second = await installer.CheckAsync(source);
+                await OnClient();
+                Assert.True(installer.IsUpToDate(source, second), "the newest release is the installed one");
+                Assert.Equal(1, fetches, "and nothing was downloaded a second time");
+
+                Log("installed " + source.Installed + " once, second check downloaded nothing");
+            }
+            finally
+            {
+                serving.Cancel();
+                listener.Stop();
+                Sources.Sources.RemoveAll(s => s.Id == id);
+                Sources.Save();
+                Delete(Sources.DirectoryOf(source));
+                Delete(served);
+                VS.MusicEngine.ReloadTracks();
+            }
+        }
+
         /// <summary>
         /// Pressing Update on something already installed replaces it. The origin is
         /// already registered by then, so the reload has to happen anyway - without it the
@@ -338,7 +408,13 @@ namespace VintageSymphony.Tests
                 "the fixture really does contain an escaping entry: " + string.Join(", ", names));
         }
 
-        static async Task ServeAsync(HttpListener listener, string file, CancellationToken cancellation)
+        /// <summary>
+        /// Serves the pack, and - when a releases listing is supplied - a GitHub-shaped
+        /// index pointing at it. Counts zip fetches, which is how a test can tell that
+        /// something was downloaded again rather than skipped.
+        /// </summary>
+        static async Task ServeAsync(HttpListener listener, string file, CancellationToken cancellation,
+            string releasesJson = null, System.Action onArchiveFetched = null)
         {
             while (!cancellation.IsCancellationRequested)
             {
@@ -352,12 +428,23 @@ namespace VintageSymphony.Tests
                     return; // listener stopped
                 }
 
-                var bytes = await File.ReadAllBytesAsync(file, cancellation);
+                var wantsReleases = releasesJson != null &&
+                                    context.Request.Url.AbsolutePath.EndsWith("/releases");
+
+                var bytes = wantsReleases
+                    ? System.Text.Encoding.UTF8.GetBytes(releasesJson)
+                    : await File.ReadAllBytesAsync(file, cancellation);
+
                 context.Response.ContentLength64 = bytes.Length;
 
-                // A HEAD is the size probe; only a GET carries the pack.
+                // A HEAD is the size probe; only a GET carries the body.
                 if (context.Request.HttpMethod == "GET")
                 {
+                    if (!wantsReleases)
+                    {
+                        onArchiveFetched?.Invoke();
+                    }
+
                     await context.Response.OutputStream.WriteAsync(bytes, cancellation);
                 }
 
