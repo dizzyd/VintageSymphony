@@ -1,1 +1,1 @@
-A situation-aware music engine replacement. Nearly 70 instrumental tracks that follow what you are doing.
+A fork of Haviland's situation-aware music engine, brought up to 1.22. Nearly 70 instrumental tracks that follow what you are doing.
