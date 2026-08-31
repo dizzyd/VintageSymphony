@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Vintagestory.API.Client;
 using Newtonsoft.Json;
 using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
@@ -139,7 +140,73 @@ namespace VintageSymphony.Tests
             }
         }
 
-        static Vintagestory.API.Client.IMusicEngine GameMusicEngine() =>
+
+        /// <summary>
+        /// The add dialog: what it refuses and what it accepts. The name becomes a
+        /// directory and an asset domain, so a name like ../oops has to be turned away
+        /// here rather than caught later by the unpacker.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task TheAddDialogRefusesBadInputAndAcceptsGood()
+        {
+            await OnClient();
+
+            const string id = "vsaddtest";
+            var added = 0;
+            var dialog = new Config.AddSourceDialog(Capi, Sources, () => added++);
+            dialog.TryOpen();
+            await Frames.Wait(3);
+
+            try
+            {
+                Type(dialog, "vsadd_name", "../oops");
+                Type(dialog, "vsadd_url", "https://example.com/pack.zip");
+                PressButton(dialog, "vsadd_add");
+                Assert.Contains(StatusOf(dialog), "lowercase", "a name that is not a plain name");
+                Assert.Equal(0, added, "nothing was added");
+
+                Type(dialog, "vsadd_name", id);
+                Type(dialog, "vsadd_url", "ftp://example.com/pack.zip");
+                PressButton(dialog, "vsadd_add");
+                Assert.Contains(StatusOf(dialog), "http", "an address we cannot fetch");
+                Assert.Equal(0, added, "still nothing added");
+
+                Type(dialog, "vsadd_url", "https://example.com/pack.zip");
+                PressButton(dialog, "vsadd_add");
+
+                Assert.Equal(1, added, "the dialog reported the addition");
+                var source = Sources.Sources.FirstOrDefault(s => s.Id == id);
+                Assert.NotNull(source, "the source is in the list");
+                Assert.Equal("https://example.com/pack.zip", source.Url, "with its address");
+                Assert.True(source.Enabled, "and switched on");
+                Log("added " + source.Id + " -> " + source.Url);
+            }
+            finally
+            {
+                dialog.TryClose();
+                Sources.Sources.RemoveAll(s => s.Id == id);
+                Sources.Save();
+            }
+        }
+
+        static void Type(GuiDialog dialog, string key, string text) =>
+            dialog.SingleComposer.GetTextInput(key).SetValue(text);
+
+        static string StatusOf(GuiDialog dialog) =>
+            dialog.SingleComposer.GetDynamicText("vsadd_status").GetText();
+
+        static void PressButton(GuiDialog dialog, string key)
+        {
+            var button = dialog.SingleComposer.GetButton(key);
+            Assert.NotNull(button, "button " + key);
+            var at = new MouseEvent(
+                (int)(button.Bounds.absX + 10), (int)(button.Bounds.absY + 10),
+                Vintagestory.API.Common.EnumMouseButton.Left, 0);
+            button.OnMouseDownOnElement(Capi, at);
+            button.OnMouseUpOnElement(Capi, at);
+        }
+
+        static IMusicEngine GameMusicEngine() =>
             VS.ClientMain.clientSystems.OfType<Vintagestory.Client.NoObf.SystemMusicEngine>().First();
     }
 }

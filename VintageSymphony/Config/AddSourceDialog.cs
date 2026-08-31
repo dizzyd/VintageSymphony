@@ -13,6 +13,16 @@ namespace VintageSymphony.Config;
 public class AddSourceDialog : GuiDialog
 {
 	private const int Width = 420;
+
+	/// <summary>
+	/// Even space at every edge. The frame is the content box plus a padding on each side
+	/// while children are positioned from its left edge, so the room to the right and
+	/// below is that padding twice over unless it is subtracted back out by hand.
+	/// </summary>
+	private const int Margin = 12;
+
+	private const string AddKey = "vsadd_add";
+	private const string CancelKey = "vsadd_cancel";
 	private const string NameKey = "vsadd_name";
 	private const string UrlKey = "vsadd_url";
 	private const string StatusKey = "vsadd_status";
@@ -34,7 +44,26 @@ public class AddSourceDialog : GuiDialog
 	private void SetupDialog()
 	{
 		var dialogBounds = ElementStdBounds.AutosizedMainDialog.WithAlignment(EnumDialogArea.CenterMiddle);
-		var sizing = ElementBounds.Fixed(0, 40, Width, 190);
+
+		var padding = (int)GuiStyle.ElementToDialogPadding;
+		var usableWidth = Width + 2 * padding;
+		var contentWidth = usableWidth - 2 * Margin;
+
+		const int top = 40;
+		const int rowHeight = 28;
+		var nameLabelY = top + 8;
+		var nameY = nameLabelY + 22;
+		var urlLabelY = nameY + rowHeight + 10;
+		var urlY = urlLabelY + 22;
+		var statusY = urlY + rowHeight + 6;
+		var buttonsY = statusY + 26;
+
+		const int buttonWidth = 110;
+
+		// The sizing child stops short of the buttons: the frame adds a padding below them
+		// whether or not anything asked for it.
+		var sizing = ElementBounds.Fixed(0, top, Width,
+			buttonsY + rowHeight + Margin - top - 2 * padding);
 
 		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
 		bgBounds.BothSizing = ElementSizing.FitToChildren;
@@ -45,16 +74,21 @@ public class AddSourceDialog : GuiDialog
 			.AddShadedDialogBG(bgBounds)
 			.AddDialogTitleBar("Add a music source", () => TryClose())
 			.AddStaticText("Name", CairoFont.WhiteDetailText(), EnumTextOrientation.Left,
-				ElementBounds.Fixed(10, 48, 100, 20))
-			.AddTextInput(ElementBounds.Fixed(10, 70, 200, 28), text => draftName = text,
-				CairoFont.WhiteDetailText(), NameKey)
+				ElementBounds.Fixed(Margin, nameLabelY, 200, 20))
+			.AddTextInput(ElementBounds.Fixed(Margin, nameY, 220, rowHeight),
+				text => draftName = text, CairoFont.WhiteDetailText(), NameKey)
 			.AddStaticText("Address", CairoFont.WhiteDetailText(), EnumTextOrientation.Left,
-				ElementBounds.Fixed(10, 106, 100, 20))
-			.AddTextInput(ElementBounds.Fixed(10, 128, Width - 20, 28), text => draftUrl = text,
-				CairoFont.WhiteDetailText(), UrlKey)
-			.AddDynamicText("", CairoFont.WhiteDetailText(), ElementBounds.Fixed(10, 162, Width - 20, 20), StatusKey)
-			.AddSmallButton("Cancel", OnCancel, ElementBounds.Fixed(10, 190, 110, 28))
-			.AddSmallButton("Add", OnAdd, ElementBounds.Fixed(Width - 120, 190, 110, 28))
+				ElementBounds.Fixed(Margin, urlLabelY, 200, 20))
+			.AddTextInput(ElementBounds.Fixed(Margin, urlY, contentWidth, rowHeight),
+				text => draftUrl = text, CairoFont.WhiteDetailText(), UrlKey)
+			.AddDynamicText("", CairoFont.WhiteDetailText(),
+				ElementBounds.Fixed(Margin, statusY, contentWidth, 20), StatusKey)
+			.AddSmallButton("Cancel", OnCancel,
+				ElementBounds.Fixed(Margin, buttonsY, buttonWidth, rowHeight),
+				EnumButtonStyle.Normal, CancelKey)
+			.AddSmallButton("Add", OnAdd,
+				ElementBounds.Fixed(usableWidth - Margin - buttonWidth, buttonsY, buttonWidth, rowHeight),
+				EnumButtonStyle.Normal, AddKey)
 			.Compose();
 
 		SingleComposer.GetTextInput(NameKey).SetPlaceHolderText("bobs-tunes");
