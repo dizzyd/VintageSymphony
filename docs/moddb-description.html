@@ -1,0 +1,203 @@
+<p>Vintage Symphony is a situation-aware music engine replacement for Vintage Story. It removes almost all original music and replaces it with almost 70 instrumental tracks that change according to the situation you are facing.</p>
+<p>The mod is currently in the testing phase. While most features should work as expected, there is still room for adjustments. So let me know if a track is to loud, becoming annoying, or does not fit the situation. Please check the available console commands as they show you more information about the track and the current situation assessment.</p>
+<p>&nbsp;</p>
+<h3>Installation</h3>
+<p>The mod can be installed using the 1-click-install.</p>
+<p>The music will download the first time you play with the mod. A save-game reload is required for the music to be recognized.</p>
+<p>&nbsp;</p>
+<h3>Updating an existing installation</h3>
+<p>Delete the old mod file from your mods directory and install the new version manually or by using 1-click-install. Keep the <em>vintage-symphony-assets_*</em> file to avoid redownloading the music files.</p>
+<p>&nbsp;</p>
+<h3>Console Commands</h3>
+<p><em>.music info</em><br />Shows artist and title of the playing track</p>
+<p><em>.music next</em><br />Finds a new song to play. Also interrupts music pauses.</p>
+<p><em>.music stop</em><br />Stops the current track</p>
+<p><em>.music config</em><br />Toggles the configuration dialog</p>
+<p><em>.music debug</em><br />Toggles the debug overlay</p>
+<p>&nbsp;</p>
+<h3>Adding/Editing/Removing Music</h3>
+<p dir="auto">Following your first install of Vintage Symphony, load a world once, then continue:</p>
+<ul>
+<li dir="auto">Find "vintage-symphony-assets_1.x.x.zip" in your mod folder.</li>
+<li dir="auto">Unzip the archive</li>
+<li dir="auto">From here, you can add/remove tracks. Navigate to the folder with the music and musicconfig.json (located inside assets/vintage-symphony/music)</li>
+<li dir="auto">Recreate the archive and overwrite the original asset file</li>
+</ul>
+<p>&nbsp;</p>
+<div class="markdown-heading" dir="auto">
+<div class="spoiler">
+<div class="spoiler-toggle">Removing/Editing a track</div>
+<div class="spoiler-text">
+<p dir="auto">Remove the track's entry in musicconfig.json, and delete its .ogg file. Make sure to avoid deleting an extra comma or leaving one.</p>
+<p dir="auto">Alternatively, modify a track's musicconfig.json entry to edit the track.</p>
+</div>
+</div>
+<div class="spoiler">
+<div class="spoiler-toggle">Adding a track</div>
+<div class="spoiler-text">
+<p dir="auto">Create a new entry in musicconfig.json. Copy/Paste one of the other entries and edit it:</p>
+<ul dir="auto">
+<li>"$type": "VintageSymphony.Engine.MusicTrack, VintageSymphony" &lt;- Leave this the same.</li>
+<li>"source": "you can put anything in here" &lt;- Displayed with .music info, typically the origin of the music: artist, show, etc.</li>
+<li>"file": "file_name" (Excluding the .ogg) It must: be lowercase and use dashes, and the file must be .ogg, and you do not include the file's extension. Special characters don't tend to work well, the alphabet is reliable. Additonally, THE MUSIC FILE MUST BE .OGG, NO VIDEO</li>
+<li>"title": "you can put anything in here" &lt;- The title is displayed with .music info, or on the .music debug display.</li>
+<li>"onPlayList": "survival|creative" &lt;- This can be left alone unless you have a specific use case.</li>
+<li>"situation": "idle|calm|adventure|danger|cave|temporalstorm|dead" &lt;- Note: Songs that play during temporalstorm will not sound right at all, due to the auditorial glitch effects from the temporal storm. Additionally, at the current time cave music tracks do not appear to work.</li>
+<li>"volume": 1.0 &lt;- Whatever volume you desire. 1 tends to work most of the time. Can be 0.5, 1.2, etc.</li>
+<li>Extra Properties. No comprehensive lists, scroll through the default music entries to find examples of the various properties. One notable property is "priority", this can be useful to prioritize/deprioritize a track.</li>
+</ul>
+<p dir="auto">Once you are done adding/modifying/removing tracks, add the assets folder (with your modified music) and the modinfo.json to a zip archive, then replace the original zip file in your mods folder. Recommended to use the exact same name for your new zip.</p>
+<p dir="auto">If the game crashes, and the logs say something about vintage symphony, (It will mention config, along with the exact line that is causing the problem) look for the error causing the issue and fix it in the musicconfig. Some common errors are misspelling the file in the config vs the file system, or missing a comma, bracket or ".</p>
+<p dir="auto">A non .ogg file will crash the game if it gets played.</p>
+<p dir="auto">Weird/non-standardized names (lowercase, dashes, no special characters) will tend to cause problems more often than not.</p>
+</div>
+</div>
+<div class="spoiler">
+<div class="spoiler-toggle">Properties of tracks</div>
+<div class="spoiler-text">
+<p>Here is a list of the extra properties a track can have as of the latest version, with example values (Some properties may be missing, but I believe all of them are here):<br /><br /></p>
+<ul>
+<li>
+<p><code>"priority": 1.0</code> &mdash; How important this track is when picking between available ones. You&rsquo;ll usually want to raise this if you're adding extra restrictions using the properties below.</p>
+</li>
+<li>
+<p><code>"minHour": 0</code> &mdash; The earliest hour of the day this track is allowed to play.</p>
+</li>
+<li>
+<p><code>"maxHour": 24</code> &mdash; The latest hour of the day this track can play.</p>
+</li>
+<li>
+<p><code>"minTemperature": -99</code> &mdash; The lowest the current temperature can be for this track to play.</p>
+</li>
+<li>
+<p><code>"maxTemperature": 99</code> &mdash; The highest the current temperature can be for this track to play.</p>
+</li>
+<li>
+<p><code>"minWorldGenTemperature": -99</code> &mdash; Like <code>minTemperature</code>, but uses the world generation temperature instead of the current one.</p>
+</li>
+<li>
+<p><code>"maxWorldGenTemperature": 99</code> &mdash; Same idea as above, but for a maximum.</p>
+</li>
+<li>
+<p><code>"minWorldGenRainfall": 0.0</code> &mdash; The minimum amount of rainfall the area received at worldgen.</p>
+</li>
+<li>
+<p><code>"maxWorldGenRainfall": 1.0</code> &mdash; The maximum rainfall allowed.</p>
+</li>
+<li>
+<p><code>"minSunLight": 0</code> &mdash; The minimum amount of sunlight required. This is the block light level where the player is standing and determines how much skylight <em>can</em> affect this block. Goes towards 0 in caves and mine shafts.</p>
+</li>
+<li>
+<p><code>"maxSunLight": 32</code> &mdash; Maximum amount of sunlight. This might not fully work&mdash;needs more testing.</p>
+</li>
+<li>
+<p><code>"minDayLight": 0</code> &mdash; Minimum amount of daylight for this track to play. (0=dark, 0.5=just before sunrise, 0.6=just after sunrise, ~1.1=noon)</p>
+</li>
+<li>
+<p><code>"maxDaylight": 2</code> &mdash; Maximum amount of daylight. The actual maximum seems to be around 1.1 and 1.2.</p>
+</li>
+<li>
+<p><code>"minSeason": 0</code> &mdash; Minimum season (0.0 = Jan 1, 1.0 = Dec 31)</p>
+</li>
+<li>
+<p><code>"maxSeason": 1</code> &mdash; Maximum season</p>
+</li>
+</ul>
+<p>&nbsp;</p>
+</div>
+</div>
+</div>
+<p>&nbsp;</p>
+<h3>Release Notes</h3>
+<p>&nbsp;</p>
+<p>1.0.4</p>
+<ul>
+<li>Fixed crash when searching for resonators</li>
+<li>Slightly increased resonator search radius</li>
+</ul>
+<p>&nbsp;</p>
+<p>1.0.3</p>
+<ul>
+<li>Updated for VS 1.21.0</li>
+<li>Increased the chance for the idle situation to become active</li>
+<li>Baby animals do no longer count as dangerous</li>
+<li>Cleanup and performance optimizations</li>
+<li>Reworked fight situation assessment</li>
+<li>Do no count hacked locusts as enemies</li>
+<li>Added workaround for unrelated crash (VS #5126)</li>
+</ul>
+<p>&nbsp;</p>
+<div class="spoiler">
+<div class="spoiler-toggle">Older release notes</div>
+<div class="spoiler-text">
+<p>1.0.2</p>
+<ul>
+<li>Fixed debug overlay updating when inactive</li>
+<li>Fixed an issue related to debug overlay which could cause a crash</li>
+<li>Fixed potential conflict with other mods using the same internal dialog ID</li>
+</ul>
+<p>&nbsp;</p>
+<p>1.0.1</p>
+<ul>
+<li>Added progress bar for asset updates</li>
+<li>Increased track cooldown time</li>
+<li>Fixed music playing during temporal storms</li>
+<li>Improved debug menu performance</li>
+</ul>
+<p>&nbsp;</p>
+<p>1.0.0</p>
+<ul>
+<li>Major rewrite of core systems</li>
+<li>Applied changes made by <a class="mention username mceNonEditable" href="https://mods.vintagestory.at/show/user/cfc745ee80ee0e4cd0c2" data-user-hash="cfc745ee80ee0e4cd0c2">DoodleGarbage</a> (thank you for maintaining the mod)</li>
+<li>Added new 17 tracks to improve variety for certain situations (death, desert climates, winter and cold climates)</li>
+<li>Added daylight property to tracks</li>
+<li>Fixed music playing over resonators</li>
+<li>Fixed track selection bias favoring a handful of songs</li>
+<li>Partial fix for track overlap issue (still possible in some cases)</li>
+<li>Improved debug overlay</li>
+<li>Improved performance</li>
+<li>Various minor bug fixes and improvements</li>
+</ul>
+<p>&nbsp;</p>
+<p>0.9.2</p>
+<ul>
+<li>Moved music tracks to a separate content mod</li>
+<li>Implemented an auto-updater to download the music content mod</li>
+<li>Tamed track substitutions (tracks are now replaced less often)</li>
+<li>Improved pausing behavior between tracks</li>
+<li>Fixed issue where minimum track playback time was not respected</li>
+<li>Slightly increased track cooldown durations</li>
+<li>Increased track randomness slightly</li>
+<li>Factored distance to rifts into situation scoring</li>
+<li>Improved various situation scoring formulas</li>
+<li>Various minor bug fixes and improvements</li>
+</ul>
+<p>&nbsp;</p>
+<p>0.9.1</p>
+<ul>
+<li>Configurable music loading / filtering</li>
+<li>Added update check and notification</li>
+<li>Added graphical configuration dialog</li>
+<li>Do not require mod to be available on server in multiplayer<br /><br /></li>
+</ul>
+<p>0.9.0</p>
+<ul>
+<li>Initial release</li>
+</ul>
+</div>
+</div>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<h3>Known issues</h3>
+<ul>
+<li>Neutral mobs might not trigger fight music when attacking</li>
+</ul>
+<p>&nbsp;</p>
+<h3>Songs and Attributions</h3>
+<p>All used tracks are royalty free.</p>
+<p>Run Faster (David Fesliyan), No Way Out (David Robson), Araguatos (Reynard Seidel), Not Much To Say (David Fesliyan), The Quiet Morning (David Fesliyan)<br />https://www.fesliyanstudios.com</p>
+<p>Desolation, Dramatic Story by Alex-Productions | https://onsound.eu/<br />Music promoted by https://www.free-stock-music.com<br />Creative Commons / Attribution 3.0 Unported License (CC BY 3.0)<br />https://creativecommons.org/licenses/by/3.0/deed.en_US</p>
+<p>Impossible Decision, Music by Eric Matyas<br />www.soundimage.org</p>
+<p>Epic Drums (Playsound), Epic Orchestral Drums (Playsound), Taiko Percussion - Preparation for Action (Sonican), Funeral (Music for Videos), Funeral (SergeQuadrado), I Believe in Ice (KOKOSHUNGSAN-NET), Melting Snow (_Yasuko_), Desert Scape - Atmospheric World Nature Loop (Sonican), Forgotten Deserts (moodmode), Marrakesh (matthewmikemusic), Desert Bells (matthewmikemusic), Goldminer's Daughter (VictoryOlympiaDay), I Cannot Speak (VictoryOlympiaDay), The Wanderer's Song (Echonn), Slight (oceaniprofondi), Morning Mood - Edvard Grieg - Flute Selection (JuliusH)<br />https://pixabay.com</p>
+<p>Special thanks to Jon Algar for his beautiful music, along with Christian Andersen, Ethan Sloan,Farrell Wooten, Atlas Kind, Bonn Fields, Breathing Tides, Christophe Gorman, Deskant, Edward Karl Hanson and Hanna Lindgren from EpidemicSound.<br />https://www.epidemicsound.com</p>
+<p>&nbsp;</p>
