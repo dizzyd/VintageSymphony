@@ -63,7 +63,7 @@ public class VintageSymphony : BaseModSystem
 
 		foreach (var source in MusicSources.Installed)
 		{
-			api.Assets.AddModOrigin(source.Id, MusicSources.DirectoryOf(source));
+			MusicSources.RegisterOrigin(api, source);
 			api.Logger.Notification("Music source '{0}' registered from {1}",
 				source.Id, MusicSources.DirectoryOf(source));
 		}

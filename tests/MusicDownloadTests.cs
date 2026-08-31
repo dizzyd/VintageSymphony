@@ -98,20 +98,95 @@ namespace VintageSymphony.Tests
             }
         }
 
+
+        /// <summary>
+        /// A pack in the game's own format, installed while the game is running, plays
+        /// without a restart.
+        ///
+        /// Asset origins are folded into the manager once during startup, so a folder that
+        /// appears later is invisible until it is added to Origins and the music category
+        /// is reloaded - and the game parsed every musicconfig at startup, so this one has
+        /// to be read here instead. Both of those are what the dialog does after a
+        /// successful install.
+        /// </summary>
+        [VsTest(TimeoutMs = 180000), RequiresClient]
+        public async Task AGameFormatPackInstalledNowPlaysWithoutRestarting()
+        {
+            const string id = "vshotloadtest";
+            var served = Path.Combine(Path.GetTempPath(), "vs-hotload-test");
+            Directory.CreateDirectory(served);
+            var archive = Path.Combine(served, "pack.zip");
+
+            BuildFixtureArchive(archive, "musicconfig.json",
+                "{ \"tracks\": [ { \"$type\": \"VintageSymphony.Engine.MusicTrack, VintageSymphony\", " +
+                "\"file\": \"fixture\", \"situation\": \"fight\", \"title\": \"Hot Loaded\", " +
+                "\"minSunLight\": 0 } ] }");
+
+            using var listener = new HttpListener();
+            listener.Prefixes.Add($"http://127.0.0.1:{Port + 1}/");
+            listener.Start();
+            using var serving = new CancellationTokenSource();
+            var server = ServeAsync(listener, archive, serving.Token);
+            using var direct = new HttpClient(new HttpClientHandler { UseProxy = false });
+
+            var source = new Music.MusicSource
+            {
+                Id = id, Name = "hot load test", Enabled = true,
+                Url = $"http://127.0.0.1:{Port + 1}/pack.zip"
+            };
+
+            try
+            {
+                Sources.Sources.Add(source);
+                var installer = new Music.MusicSourceInstaller(Sources, Capi.Logger, direct);
+                var release = await installer.CheckAsync(source);
+                await installer.InstallAsync(source, release, _ => { }, CancellationToken.None);
+                await OnClient();
+
+                Sources.RegisterOriginNow(Capi, source);
+                VS.MusicEngine.ReloadTracks();
+
+                await Until(() => PoolHas(id), 300, "the new pack joins the pool without a restart");
+
+                var track = Pool().First(t => t.Location?.Domain == id);
+                Assert.Equal("Hot Loaded", track.Title, "the title came from the pack's own config");
+                Assert.True(track.TrackSituations.Contains(Situations.Situation.Fight), "and its situation");
+                Log("pool now holds " + Pool().Count + " tracks including " + track.Location);
+            }
+            finally
+            {
+                serving.Cancel();
+                listener.Stop();
+                Sources.Sources.RemoveAll(s => s.Id == id);
+                Sources.Save();
+                Delete(Sources.DirectoryOf(source));
+                Delete(served);
+                VS.MusicEngine.ReloadTracks();
+            }
+        }
+
+        static System.Collections.Generic.List<Engine.MusicTrack> Pool() =>
+            ((Engine.MusicCurator)typeof(Engine.MusicEngine)
+                .GetField("musicCurator", System.Reflection.BindingFlags.Instance |
+                                          System.Reflection.BindingFlags.NonPublic)
+                .GetValue(VS.MusicEngine)).Tracks;
+
+        static bool PoolHas(string domain) => Pool().Any(t => t.Location?.Domain == domain);
+
         /// <summary>
         /// A pack shaped like a mod, plus an entry that tries to escape the folder it is
         /// unpacked into. Built with SharpZipLib because that is what the game has loaded -
         /// System.IO.Compression is only pulled in when the installer itself runs, so the
         /// in-game compiler cannot reference it here.
         /// </summary>
-        static void BuildFixtureArchive(string path)
+        static void BuildFixtureArchive(string path, string manifestName = null, string manifest = null)
         {
             using var stream = new FileStream(path, FileMode.Create);
             using var zip = new ZipOutputStream(stream);
 
             Write(zip, "assets/bobs/music/fixture.ogg", new string('o', 4096));
-            Write(zip, "assets/bobs/music/tracks.json",
-                "{ \"tracks\": [ { \"file\": \"fixture.ogg\", \"situations\": [\"fight\"] } ] }");
+            Write(zip, "assets/bobs/music/" + (manifestName ?? Music.TrackManifest.FileName),
+                manifest ?? "{ \"tracks\": [ { \"file\": \"fixture.ogg\", \"situations\": [\"fight\"] } ] }");
             Write(zip, "../escaped.ogg", "should never be written");
         }
 

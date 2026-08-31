@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.Client.NoObf;
 using VintageSymphony.Situations;
 using MusicTrack = VintageSymphony.Engine.MusicTrack;
 
@@ -15,6 +16,8 @@ namespace VintageSymphony.Music;
 /// </summary>
 public class LocalMusicLoader
 {
+	private const string GameMusicConfig = "musicconfig.json";
+
 	private readonly MusicSources sources;
 	private readonly ICoreClientAPI clientApi;
 	private readonly ILogger logger;
@@ -38,9 +41,11 @@ public class LocalMusicLoader
 			var musicPath = sources.MusicPathOf(source);
 
 			// The game's format wins if both are present - it is the more expressive one,
-			// and it is what a published pack ships.
-			if (File.Exists(Path.Combine(musicPath, "musicconfig.json")))
+			// and it is what a published pack ships. At startup the game has already
+			// parsed it; for a source that arrived since, this is where it gets read.
+			if (File.Exists(Path.Combine(musicPath, GameMusicConfig)))
 			{
+				tracks.AddRange(LoadGameFormat(source, musicEngine));
 				continue;
 			}
 
@@ -58,6 +63,50 @@ public class LocalMusicLoader
 					tracks.Add(track);
 				}
 			}
+		}
+
+		return tracks;
+	}
+
+	/// <summary>
+	/// Read a pack in the game's own format, the same way the game does. Anything the game
+	/// already parsed at startup is filtered out by location when the pool is built, so
+	/// reading it again here costs nothing and lets a pack downloaded mid-session play
+	/// without a restart.
+	/// </summary>
+	private List<MusicTrack> LoadGameFormat(MusicSource source, IMusicEngine musicEngine)
+	{
+		var tracks = new List<MusicTrack>();
+		var location = new AssetLocation(source.Id, "music/" + GameMusicConfig);
+
+		try
+		{
+			var asset = clientApi.Assets.TryGet(location);
+			if (asset == null)
+			{
+				logger.Warning("'{0}' has a {1} that the asset manager cannot see yet.",
+					source.Id, GameMusicConfig);
+				return tracks;
+			}
+
+			var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
+			settings.Converters.Add(new AssetLocationJsonParser(source.Id));
+
+			var config = asset.ToObject<MusicConfig>(settings);
+			foreach (var track in config?.Tracks ?? Array.Empty<IMusicTrack>())
+			{
+				if (track is not MusicTrack ours)
+				{
+					continue;
+				}
+
+				ours.Initialize(clientApi.Assets, clientApi, musicEngine);
+				tracks.Add(ours);
+			}
+		}
+		catch (Exception e)
+		{
+			logger.Error("Could not read the {0} of '{1}': {2}", GameMusicConfig, source.Id, e.Message);
 		}
 
 		return tracks;

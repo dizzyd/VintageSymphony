@@ -20,12 +20,8 @@ public class ConfigurationDialog : GuiDialog
 	private const int RowHeight = 46;
 	private const int RowsPerPage = 6;
 
-	private const string GameMusicToggleKey = "vscfg_gameMusicToggle";
+	private const string AddSourceKey = "vscfg_addsource";
 	private const string OkButtonKey = "vscfg_ok";
-	private const string AddButtonKey = "vscfg_add";
-	private const string AddIdKey = "vscfg_add_id";
-	private const string AddUrlKey = "vscfg_add_url";
-	private const string AddStatusKey = "vscfg_add_status";
 	private const string PrevKey = "vscfg_prev";
 	private const string NextKey = "vscfg_next";
 
@@ -33,8 +29,8 @@ public class ConfigurationDialog : GuiDialog
 	private readonly ConfigurationLoader configurationLoader;
 	private readonly MusicSources sources;
 	private readonly MusicSourceInstaller installer;
+	private readonly AddSourceDialog addSourceDialog;
 
-	private bool draftLoadGameMusic;
 	private readonly Dictionary<string, bool> draftSourceEnabled = new();
 
 	/// <summary>Status text per source, so a download can report itself where it belongs.</summary>
@@ -42,9 +38,6 @@ public class ConfigurationDialog : GuiDialog
 
 	private string busySourceId;
 	private int page;
-	private string draftAddId = "";
-	private string draftAddUrl = "";
-	private string addStatus = "";
 
 	public ConfigurationDialog(ICoreClientAPI api, Configuration configuration,
 		ConfigurationLoader configurationLoader, MusicSources sources)
@@ -54,6 +47,7 @@ public class ConfigurationDialog : GuiDialog
 		this.configurationLoader = configurationLoader;
 		this.sources = sources;
 		installer = new MusicSourceInstaller(sources, api.Logger);
+		addSourceDialog = new AddSourceDialog(api, sources, OnSourceAdded);
 		SetupDialog();
 	}
 
@@ -73,19 +67,15 @@ public class ConfigurationDialog : GuiDialog
 
 		var pagerY = listTop + listHeight + 6;
 		var showPager = PageCount > 1;
-		var addY = pagerY + (showPager ? 42 : 24);
-		var gameMusicY = addY + 62;
-
-		var boundsGameSwitch = ElementBounds.Fixed(10, gameMusicY, 10, 30);
-		var boundsGameLabel = ElementBounds.Fixed(50, gameMusicY + 5, DialogWidth - 60, 30);
-		var boundsNote = ElementBounds.Fixed(10, gameMusicY + 40, DialogWidth - 20, 30);
+		var addY = pagerY + (showPager ? 42 : 12);
+		var boundsNote = ElementBounds.Fixed(10, addY + 40, DialogWidth - 20, 30);
 
 		const int okWidth = 120;
 		var okX = DialogWidth / 2 + GuiStyle.ElementToDialogPadding - okWidth / 2;
-		var boundsOk = ElementBounds.Fixed(okX, gameMusicY + 78, okWidth, 30);
+		var boundsOk = ElementBounds.Fixed(okX, addY + 76, okWidth, 30);
 
 		// Sizing child: the background fits itself around what the dialog holds
-		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, gameMusicY + 78);
+		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth, addY + 76);
 
 		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
 		bgBounds.BothSizing = ElementSizing.FitToChildren;
@@ -112,78 +102,15 @@ public class ConfigurationDialog : GuiDialog
 					EnumButtonStyle.Normal, NextKey);
 		}
 
-		// Adding a source belongs here rather than in a chat command: it is mostly a URL,
-		// and a URL is something you paste.
 		SingleComposer
-			.AddStaticText("Add a source:", CairoFont.WhiteDetailText(), EnumTextOrientation.Left,
-				ElementBounds.Fixed(10, addY - 18, 200, 20))
-			.AddTextInput(ElementBounds.Fixed(10, addY, 110, 28), text => draftAddId = text,
-				CairoFont.WhiteDetailText(), AddIdKey)
-			.AddTextInput(ElementBounds.Fixed(128, addY, 262, 28), text => draftAddUrl = text,
-				CairoFont.WhiteDetailText(), AddUrlKey)
-			.AddSmallButton("Add", OnAddSource, ElementBounds.Fixed(400, addY, 70, 28),
-				EnumButtonStyle.Normal, AddButtonKey)
-			.AddDynamicText(addStatus, CairoFont.WhiteDetailText(),
-				ElementBounds.Fixed(10, addY + 30, DialogWidth - 20, 20), AddStatusKey)
-			.AddSwitch(state => draftLoadGameMusic = state, boundsGameSwitch, GameMusicToggleKey)
-			.AddStaticText("Also play Vintage Story's own music", CairoFont.WhiteSmallText(),
-				EnumTextOrientation.Left, boundsGameLabel)
-			.AddStaticText("Closing reloads the music selection.", CairoFont.WhiteDetailText(),
+			.AddSmallButton("Add a source...", () => { addSourceDialog.TryOpen(); return true; },
+				ElementBounds.Fixed(10, addY, 160, 28), EnumButtonStyle.Normal, AddSourceKey)
+			.AddStaticText("Changes apply when this closes.", CairoFont.WhiteDetailText(),
 				EnumTextOrientation.Left, boundsNote)
 			.AddSmallButton("OK", () => TryClose(), boundsOk, EnumButtonStyle.Normal, OkButtonKey)
 			.Compose();
 
 		RestoreSwitchStates();
-
-		SingleComposer.GetTextInput(AddIdKey).SetPlaceHolderText("name");
-		SingleComposer.GetTextInput(AddUrlKey).SetPlaceHolderText("https://...");
-		SingleComposer.GetTextInput(AddIdKey).SetValue(draftAddId);
-		SingleComposer.GetTextInput(AddUrlKey).SetValue(draftAddUrl);
-	}
-
-	/// <summary>
-	/// Register a place to download from. The id names a folder and an asset domain, so it
-	/// has to be plain text; the url has to be one we can actually fetch.
-	/// </summary>
-	private bool OnAddSource()
-	{
-		var id = draftAddId.Trim().ToLowerInvariant();
-		var url = draftAddUrl.Trim();
-
-		if (!Regex.IsMatch(id, "^[a-z0-9][a-z0-9-]{0,31}$"))
-		{
-			return SetAddStatus("A name may only use lowercase letters, digits and dashes.");
-		}
-
-		if (!url.StartsWith("http://") && !url.StartsWith("https://"))
-		{
-			return SetAddStatus("That does not look like an http address.");
-		}
-
-		if (sources.Sources.Any(s => s.Id == id))
-		{
-			return SetAddStatus($"There is already a source called '{id}'.");
-		}
-
-		sources.Sources.Add(new MusicSource { Id = id, Name = id, Enabled = true, Url = url });
-		sources.Save();
-
-		draftSourceEnabled[id] = true;
-		draftAddId = "";
-		draftAddUrl = "";
-		addStatus = $"Added '{id}' - press Download to fetch it.";
-
-		// Show it straight away, on the page it landed on.
-		page = (sources.Sources.Count - 1) / RowsPerPage;
-		SetupDialog();
-		return true;
-	}
-
-	private bool SetAddStatus(string text)
-	{
-		addStatus = text;
-		SingleComposer.GetDynamicText(AddStatusKey)?.SetNewText(text);
-		return true;
 	}
 
 	private IEnumerable<MusicSource> PageOfSources() =>
@@ -202,8 +129,6 @@ public class ConfigurationDialog : GuiDialog
 	/// </summary>
 	private void RestoreSwitchStates()
 	{
-		SingleComposer.GetSwitch(GameMusicToggleKey).On = draftLoadGameMusic;
-
 		foreach (var source in PageOfSources())
 		{
 			if (draftSourceEnabled.TryGetValue(source.Id, out var enabled))
@@ -230,8 +155,9 @@ public class ConfigurationDialog : GuiDialog
 				.AddDynamicText(StatusOf(source), CairoFont.WhiteDetailText(),
 					ElementBounds.Fixed(46, y + 24, 280, 20), "vscfg_status_" + source.Id);
 
-			// A source with nowhere to download from is somebody's own folder: nothing to press.
-			if (!string.IsNullOrWhiteSpace(source.Url) && !isBusy)
+			// The game's own music comes with the game, and a source with nowhere to
+			// download from is somebody's own folder: neither has anything to press.
+			if (!MusicSources.IsBuiltIn(source) && !string.IsNullOrWhiteSpace(source.Url) && !isBusy)
 			{
 				// What is on disk decides, not what we remember installing: a folder
 				// someone filled in by hand is just as installed as one we fetched.
@@ -245,11 +171,29 @@ public class ConfigurationDialog : GuiDialog
 		}
 	}
 
+	/// <summary>A source was added in the other dialog; show it where it landed.</summary>
+	private void OnSourceAdded()
+	{
+		var added = sources.Sources.LastOrDefault();
+		if (added != null)
+		{
+			draftSourceEnabled[added.Id] = added.Enabled;
+		}
+
+		page = (sources.Sources.Count - 1) / RowsPerPage;
+		SetupDialog();
+	}
+
 	private string StatusOf(MusicSource source)
 	{
 		if (statusText.TryGetValue(source.Id, out var status))
 		{
 			return status;
+		}
+
+		if (MusicSources.IsBuiltIn(source))
+		{
+			return "comes with the game";
 		}
 
 		if (!sources.HasMusicOnDisk(source))
@@ -294,7 +238,15 @@ public class ConfigurationDialog : GuiDialog
 				fraction => SetStatus(source, $"downloading{size} {fraction * 100:0}%"),
 				CancellationToken.None);
 
-			SetStatus(source, "installed - restart to hear it");
+			// Put the new folder in front of the asset manager and rebuild the pool, so it
+			// plays now rather than after a restart.
+			await OnMainThread(() =>
+			{
+				sources.RegisterOriginNow(capi, source);
+				VintageSymphony.MusicEngine?.ReloadTracks();
+			});
+
+			SetStatus(source, "installed");
 		}
 		catch (Exception e)
 		{
@@ -305,6 +257,18 @@ public class ConfigurationDialog : GuiDialog
 		{
 			busySourceId = null;
 		}
+	}
+
+	/// <summary>Hop back to the thread the game expects its own state to be touched on.</summary>
+	private Task OnMainThread(Action action)
+	{
+		var done = new TaskCompletionSource();
+		capi.Event.EnqueueMainThreadTask(() =>
+		{
+			try { action(); done.SetResult(); }
+			catch (Exception e) { done.SetException(e); }
+		}, "vscfg-apply");
+		return done.Task;
 	}
 
 	private void SetStatus(MusicSource source, string text)
@@ -325,7 +289,6 @@ public class ConfigurationDialog : GuiDialog
 	{
 		base.OnGuiOpened();
 
-		draftLoadGameMusic = configuration.LoadGameMusic;
 		draftSourceEnabled.Clear();
 		foreach (var source in sources.Sources)
 		{
@@ -345,7 +308,7 @@ public class ConfigurationDialog : GuiDialog
 
 	private void Apply()
 	{
-		var changed = draftLoadGameMusic != configuration.LoadGameMusic;
+		var changed = false;
 
 		foreach (var source in sources.Sources)
 		{
@@ -361,8 +324,6 @@ public class ConfigurationDialog : GuiDialog
 			return;
 		}
 
-		configuration.LoadGameMusic = draftLoadGameMusic;
-		configurationLoader.SaveConfiguration(configuration);
 		sources.Save();
 
 		VintageSymphony.MusicEngine?.ReloadTracks();

@@ -1,5 +1,4 @@
 using Vintagestory.API.Client;
-using Vintagestory.API.Config;
 using VintageSymphony.Config;
 
 namespace VintageSymphony.Engine;
@@ -32,13 +31,8 @@ public class TrackFilter
             return false;
         }
 
-        var domain = surfaceTrack.Location.Domain;
-
-        if (domain == GlobalConstants.DefaultDomain)
-        {
-            return configuration.LoadGameMusic;
-        }
-
-        return musicDomains.Contains(domain);
+        // The game's own music is a source too - its domain is "game" - so one rule covers
+        // everything: is this track's source switched on?
+        return musicDomains.Contains(surfaceTrack.Location.Domain);
     }
 }

@@ -22,7 +22,7 @@ namespace VintageSymphony.Tests
     /// </summary>
     public class ConfigurationApply
     {
-        const string GameMusicSwitch = "vscfg_gameMusicToggle";
+        const string GameMusicSwitch = "vscfg_src_game";
 
         static Engine.MusicCurator Curator =>
             (Engine.MusicCurator)typeof(Engine.MusicEngine)
@@ -41,8 +41,9 @@ namespace VintageSymphony.Tests
             var dialog = VS.ConfigurationDialog;
             Assert.NotNull(dialog, "configuration dialog");
 
-            var wasOn = VS.Configuration.LoadGameMusic;
-            Assert.False(wasOn, "game music starts off");
+            var gameSource = VS.MusicSources.Sources.First(s => s.Id == "game");
+            var wasOn = gameSource.Enabled;
+            Assert.False(wasOn, "the game's own music starts off");
             Assert.Equal(0, GameTracks, "no vanilla tracks in the pool to begin with");
 
             try
@@ -52,12 +53,12 @@ namespace VintageSymphony.Tests
                 await ClickSwitch(dialog, GameMusicSwitch);
 
                 // The draft is not the configuration: nothing has happened yet.
-                Assert.False(VS.Configuration.LoadGameMusic, "config untouched while the dialog is open");
+                Assert.False(gameSource.Enabled, "the source is untouched while the dialog is open");
                 Assert.Equal(0, GameTracks, "pool untouched while the dialog is open");
 
                 await CloseDialog(dialog);
 
-                Assert.True(VS.Configuration.LoadGameMusic, "config applied on close");
+                Assert.True(gameSource.Enabled, "applied on close");
                 await Until(() => Curator.Tracks.Count > 0 && GameTracks > 0, 300,
                     "the pool rebuilds with vanilla tracks in it");
                 Log("after enabling: " + GameTracks + " vanilla tracks, " + Curator.Tracks.Count + " total");
@@ -67,7 +68,7 @@ namespace VintageSymphony.Tests
                 await ClickSwitch(dialog, GameMusicSwitch);
                 await CloseDialog(dialog);
 
-                Assert.False(VS.Configuration.LoadGameMusic, "config applied on close again");
+                Assert.False(gameSource.Enabled, "applied on close again");
 
                 // This is the half that used to need a restart: turning it off left
                 // everything already loaded in the pool for the rest of the session.
@@ -82,7 +83,7 @@ namespace VintageSymphony.Tests
             finally
             {
                 if (dialog.IsOpened()) await CloseDialog(dialog);
-                VS.Configuration.LoadGameMusic = wasOn;
+                gameSource.Enabled = wasOn;
             }
         }
 

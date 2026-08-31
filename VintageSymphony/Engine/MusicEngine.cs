@@ -175,7 +175,15 @@ public class MusicEngine : BaseModSystem
 			.Select(t => t as MusicTrack ?? new MusicTrackWrapper(t))
 			.ToList();
 
-		var local = new LocalMusicLoader(sources, clientApi!).LoadTracks(gameMusicEngine);
+		// A source using the game's format is parsed twice over - once by the game at
+		// startup, once by us so a pack installed since then plays without a restart.
+		// Whichever got there first wins; the other is the same track.
+		var known = tracks.Select(t => t.Location?.ToString()).Where(l => l != null).ToHashSet();
+		var local = new LocalMusicLoader(sources, clientApi!)
+			.LoadTracks(gameMusicEngine)
+			.Where(t => known.Add(t.Location?.ToString() ?? ""))
+			.ToList();
+
 		tracks.AddRange(local);
 		musicCurator.Tracks = tracks;
 

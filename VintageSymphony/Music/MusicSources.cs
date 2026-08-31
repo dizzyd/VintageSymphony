@@ -1,5 +1,7 @@
 using Newtonsoft.Json;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.Common;
 
 namespace VintageSymphony.Music;
 
@@ -16,6 +18,14 @@ public class MusicSources
 
 	/// <summary>The music that ships as the default experience.</summary>
 	public const string DefaultSourceId = "vintagesymphony";
+
+	/// <summary>
+	/// The game's own music. It is a source like any other as far as switching it on and
+	/// off goes - it just arrives with the game rather than being downloaded.
+	/// </summary>
+	public const string GameSourceId = "game";
+
+	public static bool IsBuiltIn(MusicSource source) => source.Id == GameSourceId;
 
 	private readonly ILogger logger;
 
@@ -40,6 +50,36 @@ public class MusicSources
 	public string DirectoryOf(MusicSource source) => Path.Combine(RootPath, SourcesFolder, source.Id);
 	public string MusicPathOf(MusicSource source) => Path.Combine(DirectoryOf(source), MusicFolder);
 
+	/// <summary>
+	/// Put a source's folder in front of the asset manager during startup, before assets
+	/// are read.
+	/// </summary>
+	public void RegisterOrigin(ICoreAPI api, MusicSource source)
+	{
+		api.Assets.AddModOrigin(source.Id, DirectoryOf(source));
+	}
+
+	/// <summary>
+	/// The same, for a source that arrived after the game had started.
+	///
+	/// AddModOrigin only queues an origin into CustomModOrigins, which the asset manager
+	/// folds into Origins once during startup - so a late one would never be looked at.
+	/// Adding it to Origins and reloading the music category is what makes a source that
+	/// was just downloaded resolve without restarting the game.
+	/// </summary>
+	public void RegisterOriginNow(ICoreClientAPI capi, MusicSource source)
+	{
+		var path = DirectoryOf(source);
+		if (capi.Assets.Origins.Any(o => o is PathOrigin p && p.Domain == source.Id && p.OriginPath.TrimEnd(Path.DirectorySeparatorChar) == path))
+		{
+			return;
+		}
+
+		capi.Assets.Origins.Add(new PathOrigin(source.Id, path));
+		capi.Assets.Reload(AssetCategory.music);
+		logger.Notification("Music source '{0}' is now available from {1}", source.Id, path);
+	}
+
 	public void Load()
 	{
 		var path = Path.Combine(RootPath, FileName);
@@ -62,6 +102,25 @@ public class MusicSources
 			logger.Error("Could not read {0}: {1}. Using the default music sources.", path, e.Message);
 			Sources = DefaultSources();
 		}
+
+		EnsureBuiltInFirst();
+	}
+
+	/// <summary>
+	/// The game's own music is always offered, and always at the top - including in lists
+	/// written before it was one of these.
+	/// </summary>
+	private void EnsureBuiltInFirst()
+	{
+		var builtIn = Sources.FirstOrDefault(IsBuiltIn);
+		if (builtIn == null)
+		{
+			builtIn = new MusicSource { Id = GameSourceId, Name = "Vintage Story's own music", Enabled = false };
+			Sources.Add(builtIn);
+		}
+
+		Sources.Remove(builtIn);
+		Sources.Insert(0, builtIn);
 	}
 
 	public void Save()
@@ -75,6 +134,12 @@ public class MusicSources
 
 	private static List<MusicSource> DefaultSources() => new()
 	{
+		new MusicSource
+		{
+			Id = GameSourceId,
+			Name = "Vintage Story's own music",
+			Enabled = false
+		},
 		new MusicSource
 		{
 			Id = DefaultSourceId,

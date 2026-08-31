@@ -32,13 +32,14 @@ namespace VintageSymphony.Tests
             var vanilla = VanillaTracks();
             Assert.Greater(vanilla.Length, 0, "tracks the game handed the patch");
 
-            var wasLoadingGameMusic = VS.Configuration.LoadGameMusic;
+            var gameSource = VS.MusicSources.Sources.First(s => s.Id == "game");
+            var wasLoadingGameMusic = gameSource.Enabled;
             var wasMusicLevel = ClientSettings.MusicLevel;
             try
             {
-                // The harness runs silent and the mod defaults to its own pack, so put
-                // the game's music in front of it deliberately.
-                VS.Configuration.LoadGameMusic = true;
+                // The harness runs silent and the game's own music is off by default, so
+                // switch that source on deliberately.
+                gameSource.Enabled = true;
                 curator.Tracks = new List<Engine.MusicTrack>();
                 engine.LoadTracks(vanilla, Vanilla());
 
@@ -94,7 +95,7 @@ namespace VintageSymphony.Tests
             {
                 engine.Playback.StopTrack(0f);
                 ClientSettings.MusicLevel = wasMusicLevel;
-                VS.Configuration.LoadGameMusic = wasLoadingGameMusic;
+                gameSource.Enabled = wasLoadingGameMusic;
             }
         }
 
