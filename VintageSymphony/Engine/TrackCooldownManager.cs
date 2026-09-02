@@ -24,6 +24,9 @@ public class TrackCooldownManager
 		this.currentTimeMs = currentTimeMs;
 	}
 
+	/// <summary>How long a track that just played stays out of the running.</summary>
+	public long CooldownDuration => trackCooldownMs;
+
 	public void SetCooldownDuration(long cooldownMs, long cooldownVarianceMs = 0)
 	{
 		trackCooldownMs = cooldownMs;

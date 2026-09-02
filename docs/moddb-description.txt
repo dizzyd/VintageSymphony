@@ -94,7 +94,7 @@ the way to go if you want the finer controls — time of day, season, temperatur
 
   - .music next — skip to another track, and end any pause
 
-  - .music stop — stop the current track
+  - .music stop — stop the music and hold silence for a few minutes
 
   - .music config — the music sources dialog
 

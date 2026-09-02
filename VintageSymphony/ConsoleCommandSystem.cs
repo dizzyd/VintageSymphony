@@ -26,6 +26,7 @@ public class ConsoleCommandSystem : ModSystem
 			.EndSubCommand();
 		
 		api.ChatCommands.Get("music").BeginSubCommand("stop")
+			.WithDescription("Stop the music and hold silence for a while")
 			.HandleWith(StopTrack)
 			.EndSubCommand();
 		
@@ -72,8 +73,17 @@ public class ConsoleCommandSystem : ModSystem
 
 	private TextCommandResult StopTrack(TextCommandCallingArgs args)
 	{
-		VintageSymphony.MusicEngine?.Playback.StopTrackAndPause();
-		return TextCommandResult.Success();
+		var playback = VintageSymphony.MusicEngine?.Playback;
+		if (playback == null)
+		{
+			return TextCommandResult.Success();
+		}
+
+		// Say how long the silence lasts. Music coming back on its own is the point of a
+		// pause rather than a mute, but it is a surprise if nobody said so.
+		var seconds = playback.Stop();
+		return TextCommandResult.Success(
+			$"&gt; stopped. Music returns in about {seconds / 60}m {seconds % 60}s, or type .music next");
 	}
 
 	private TextCommandResult OutputCurrentTrack(TextCommandCallingArgs args)

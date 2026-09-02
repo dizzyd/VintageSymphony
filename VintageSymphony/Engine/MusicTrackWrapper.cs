@@ -37,9 +37,15 @@ public sealed class MusicTrackWrapper : MusicTrack
 
 	public override bool IsPlaying => wrappedTrack.IsActive;
 
+	/// <summary>
+	/// BeginSort rolls the wrapped track's StartPriority, and selection reads it off this
+	/// wrapper - so the roll has to be carried back over, or every wrapped track sorts on
+	/// whatever the value happened to be when it was wrapped.
+	/// </summary>
 	public override void BeginSort()
 	{
 		wrappedTrack.BeginSort();
+		StartPriority = wrappedTrack.StartPriority;
 	}
 
 	public override void Initialize(IAssetManager assetManager, ICoreClientAPI capi, IMusicEngine musicEngine)

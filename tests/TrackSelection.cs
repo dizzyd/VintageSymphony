@@ -81,8 +81,11 @@ namespace VintageSymphony.Tests
 
                 engine.NextTrack();
 
+                // Not necessarily this instant: if something was already playing, the next
+                // track waits for its fade out rather than starting over the top of it.
+                await Until(() => engine.CurrentMusicTrack != null, 900, "a track was selected");
+
                 var track = engine.CurrentMusicTrack;
-                Assert.NotNull(track, "a track was selected");
                 await Until(() => track.IsPlaying, 300, "the selected track starts playing");
 
                 Log("playing " + track.Name + " [" + track.Situation + "] from the " +

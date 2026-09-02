@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using VintageSymphony.Situations;
-using VintageSymphony.Util;
 
 namespace VintageSymphony.Engine;
 
@@ -32,6 +31,48 @@ public class Playback
 
 	private int musicFrequency = 2; // Default middle value
 
+	/// <summary>
+	/// How long a track stays out of the running after it played, however often the player
+	/// asked for music. The pause table above is all zeroes at the highest frequency -
+	/// deliberately, that setting means continuous music - and deriving the cooldown from
+	/// it left no cooldown at all, so the few highest-priority tracks that fit the moment
+	/// repeated between themselves. The game's own same-song cooldown never drops below
+	/// eight minutes either.
+	/// </summary>
+	private const long MinimumTrackCooldownMs = 8L * 60L * 1000L;
+
+	/// <summary>
+	/// The shortest silence <see cref="Stop"/> will hold. Same reason: at the highest music
+	/// frequency the ordinary between-track pause is zero, and a stop that borrowed it was
+	/// followed by a new track on the very next tick.
+	/// </summary>
+	private const long MinimumManualPauseMs = 180L * 1000L;
+
+	/// <summary>Slack on top of a fade's own length before it is treated as over.</summary>
+	private const long FadeOutGraceMs = 500L;
+
+	/// <summary>
+	/// Tracks told to fade out and not yet silent, with the moment their fade is due to be
+	/// over. A faded track is not something the engine may forget: the sound is still
+	/// audible for the length of the fade, and nothing else in the mod holds a reference to
+	/// it. Only <see cref="Update"/> touches this, so the game's audio threads cannot race
+	/// with it.
+	/// </summary>
+	private readonly Dictionary<MusicTrack, long> fadingOut = new();
+
+	/// <summary>Something is still audible from a track that has been stopped.</summary>
+	public bool IsFadingOut => fadingOut.Count > 0;
+
+	/// <summary>
+	/// A skip is outstanding: someone asked for the next track and the previous one is
+	/// still fading. Held so the wait for the fade cannot be swallowed by a pause that
+	/// something else starts in the meantime - a playlist switch, say.
+	/// </summary>
+	private bool startWhenQuiet;
+
+	/// <summary>The track that played last, kept so the next one need not be it again.</summary>
+	private MusicTrack? lastPlayedTrack;
+
 	public Playback(
 		ILogger logger,
 		TrackCooldownManager trackCooldownManager,
@@ -52,15 +93,16 @@ public class Playback
 
 	public void Update(float dt)
 	{
+		ForgetFinishedFadeOuts();
 		MonitorCurrentTrack();
 		AutoEnqueueNextTrack();
 	}
 
 	public void SetMusicFrequency(int frequency)
 	{
-		musicFrequency = frequency;
-		var cooldown = (long)(10 * PauseDurations[frequency][0] * 1000L);
-		trackCooldownManager.SetCooldownDuration(cooldown);
+		musicFrequency = Math.Clamp(frequency, 0, PauseDurations.Length - 1);
+		var cooldown = (long)(10 * PauseDurations[musicFrequency][0] * 1000L);
+		trackCooldownManager.SetCooldownDuration(Math.Max(cooldown, MinimumTrackCooldownMs));
 
 		if (Pause.Active)
 		{
@@ -111,27 +153,32 @@ public class Playback
 
 		var filteredTracks = CurrentPlaylist.GetTracks(TrackFilterPredicate);
 
-		return SelectTrack(filteredTracks.Where(track => !trackCooldownManager.IsOnCooldown(track)))
-		       // If no track found (all are on cooldown), try again ignoring cooldown
-		       ?? SelectTrack(filteredTracks);
+		return TrackSelector.Select(filteredTracks.Where(track => !trackCooldownManager.IsOnCooldown(track)))
+		       // Everything that fits has played recently. Going round again beats sitting
+		       // in silence, but not straight back into the track that just finished - a
+		       // skip that plays the same song again reads as a broken skip. The game's own
+		       // engine refuses its LastPlayedTrack for the same reason.
+		       ?? TrackSelector.Select(filteredTracks.Where(track => track != lastPlayedTrack))
+		       // Unless it really is the only thing that fits.
+		       ?? TrackSelector.Select(filteredTracks);
 	}
 
 	private bool TrackFilterPredicate(MusicTrack track)
 	{
+		// Never what is already sounding. The cooldown list cannot stand in for this: its
+		// duration is a setting, and the fallback above ignores it outright once everything
+		// that fits has played. Picking the playing track means BeginPlay on a track that
+		// still owns a live sound, which is the surest way to end up with two of them.
+		if (track == CurrentTrack || fadingOut.ContainsKey(track))
+		{
+			return false;
+		}
+
 		var playerPosition = VintageSymphony.ClientApi.World.Player.Entity.Pos.AsBlockPos;
 		var climateCondition = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(playerPosition);
 
 		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, getPlayerProperties(),
 			climateCondition, playerPosition);
-	}
-
-	private MusicTrack? SelectTrack(IEnumerable<MusicTrack> tracks)
-	{
-		return tracks
-			.ForeachContinuous(track => track.BeginSort())
-			.OrderByDescending(track => track.Priority)
-			.ThenBy(_ => Random.Shared.Next())
-			.FirstOrDefault();
 	}
 
 	/// <summary>
@@ -151,6 +198,37 @@ public class Playback
 	{
 		StopTrack();
 		Pause.Stop();
+		startWhenQuiet = true;
+		TryStartNextTrack();
+	}
+
+	/// <summary>
+	/// Stop the music and hold silence, which is what /music stop is asking for. The
+	/// automatic pause is not enough on its own - see <see cref="MinimumManualPauseMs"/>.
+	/// Returns how long the silence will last, in seconds.
+	/// </summary>
+	public int Stop(float fadeOutTimeS = 2f)
+	{
+		StopTrack(fadeOutTimeS);
+		Pause.Start(Math.Max(GetPauseDuration(), MinimumManualPauseMs));
+		return Pause.GetRemainingTimeS();
+	}
+
+	/// <summary>
+	/// Start something, unless a stopped track is still audible. The waiting is the point:
+	/// the fade out is two seconds long, and starting regardless is what laid one track
+	/// over another every time the situation changed or /music next was typed.
+	/// </summary>
+	private void TryStartNextTrack()
+	{
+		if (CurrentTrack != null || IsFadingOut)
+		{
+			return;
+		}
+
+		// The wait is over either way: a skip that finds nothing to play is a skip that
+		// happened, not one still owed.
+		startWhenQuiet = false;
 
 		var track = FindNextTrack();
 		if (track != null)
@@ -161,6 +239,7 @@ public class Playback
 
 	private void PlayTrack(MusicTrack track)
 	{
+		lastPlayedTrack = track;
 		CurrentTrack = track;
 		CurrentTrack.BeginPlay(getPlayerProperties());
 		if (!track.DisableCooldown)
@@ -173,18 +252,61 @@ public class Playback
 
 	public void StopTrack(float fadeOutTimeS = 2f)
 	{
-		if (CurrentTrack == null)
+		var track = CurrentTrack;
+		CurrentTrack = null;
+		startWhenQuiet = false;
+
+		if (track == null)
 		{
 			return;
 		}
 
-		logger.Debug($"Stopping track: {CurrentTrack.Name}");
-		if (CurrentTrack.IsPlaying)
+		logger.Debug($"Stopping track: {track.Name}");
+		if (!track.IsPlaying)
 		{
-			CurrentTrack.FadeOut(fadeOutTimeS);
+			return;
 		}
 
-		CurrentTrack = null;
+		track.FadeOut(fadeOutTimeS);
+
+		// The fade belongs to this engine until it is over. Dropping the reference here -
+		// which is what used to happen - left a sound playing that nothing could stop and
+		// nothing knew about, and cleared the way for the next track to start on top of it.
+		fadingOut[track] = getCurrentTimeMs() + (long)(fadeOutTimeS * 1000f) + FadeOutGraceMs;
+	}
+
+	/// <summary>
+	/// Retire the tracks whose fade out has finished.
+	///
+	/// A track drops off this list as soon as it goes quiet. If one is still sounding when
+	/// its fade was due to be over, the fade did not take - the game skips a fade's
+	/// completion callback if anything issued another fade on that sound in the meantime,
+	/// and this mod's own ContinuePlay issues one - so it is stopped outright rather than
+	/// left to play on unowned.
+	/// </summary>
+	private void ForgetFinishedFadeOuts()
+	{
+		if (fadingOut.Count == 0)
+		{
+			return;
+		}
+
+		var now = getCurrentTimeMs();
+		foreach (var (track, deadline) in fadingOut.ToList())
+		{
+			if (track.IsPlaying && now < deadline)
+			{
+				continue;
+			}
+
+			if (track.IsPlaying)
+			{
+				logger.Debug($"Fade out of {track.Name} did not finish in time; stopping it");
+				track.FadeOut(0f);
+			}
+
+			fadingOut.Remove(track);
+		}
 	}
 
 	public void StopTrackAndPause(float fadeOutTimeS = 2f)
@@ -220,9 +342,9 @@ public class Playback
 
 	private void AutoEnqueueNextTrack()
 	{
-		if (CurrentTrack == null && !IsPaused)
+		if (CurrentTrack == null && (startWhenQuiet || !IsPaused))
 		{
-			NextTrack();
+			TryStartNextTrack();
 		}
 	}
 
