@@ -123,8 +123,8 @@ public class SituationalFactsCollector
 		UpdateHoldingWeapon();
 
 		var nearbyEnemies = FetchNearbyEnemies();
-		UpdateEnemyDistance(nearbyEnemies);
-		UpdateIsAttacked(nearbyEnemies);
+		var enemyDistances = UpdateEnemyDistance(nearbyEnemies);
+		UpdateIsAttacked(nearbyEnemies, enemyDistances);
 
 		UpdateRiftDistance();
 		UpdateSunFacts();
@@ -242,8 +242,11 @@ public class SituationalFactsCollector
 	/// so ordering by distance and stopping at the first one in sight costs one raytrace
 	/// where testing every enemy cost one each - and raytracing is the second most
 	/// expensive thing here, growing with the size of the horde.
+	///
+	/// Returns the distances, sorted ascending, with <paramref name="nearbyEnemies"/>
+	/// sorted alongside them.
 	/// </summary>
-	private void UpdateEnemyDistance(Entity[] nearbyEnemies)
+	private float[] UpdateEnemyDistance(Entity[] nearbyEnemies)
 	{
 		var playerPos = PlayerEntity.Pos.XYZFloat;
 
@@ -259,8 +262,7 @@ public class SituationalFactsCollector
 			}
 		}
 
-		// Sorts nearbyEnemies alongside, which UpdateIsAttacked does not mind - it reads
-		// all of them regardless of order.
+		// Sorts nearbyEnemies alongside; UpdateIsAttacked relies on that order.
 		Array.Sort(distances, nearbyEnemies);
 
 		float closestVisibleDistance = float.PositiveInfinity;
@@ -284,6 +286,7 @@ public class SituationalFactsCollector
 
 		facts.EnemyDistance = closestDistance;
 		facts.VisibleEnemyDistance = closestVisibleDistance;
+		return distances;
 	}
 
 	private bool IsEntityVisible(Entity entity)
@@ -318,6 +321,10 @@ public class SituationalFactsCollector
 				case EnumBlockMaterial.Sand:
 				case EnumBlockMaterial.Snow:
 				case EnumBlockMaterial.Ice:
+				// A window is a wall as far as fighting goes: nothing behind glass can be
+				// reached from either side. Leaving it see-through is what started the
+				// combat music for a drifter outside the window.
+				case EnumBlockMaterial.Glass:
 					return false;
 				default:
 					return true;
@@ -331,14 +338,24 @@ public class SituationalFactsCollector
 		}
 	}
 
-	private void UpdateIsAttacked(Entity[] nearbyEnemies)
+	/// <summary>
+	/// Is something fighting the player? An enemy counts when it is in its attack or hurt
+	/// animation, or running at the player - and only when the player could see it. A
+	/// drifter that has noticed someone indoors runs at the wall, and its run animation
+	/// used to read as an attack from the other side of the stone; if it does get a hit
+	/// in, the damage fact covers that. The line-of-sight test is a raytrace, so it is
+	/// asked only of the enemies whose animation already qualifies them, and none past
+	/// the distance at which sight stops mattering to the scores.
+	/// </summary>
+	private void UpdateIsAttacked(Entity[] nearbyEnemies, float[] distances)
 	{
 		bool isCurrentlyAttacked = false;
 		var playerPos = PlayerEntity.Pos.XYZ;
 
-		// Use the already fetched nearby entities
-		foreach (var entity in nearbyEnemies)
+		for (int i = 0; i < nearbyEnemies.Length && distances[i] <= VisibleEnemyRelevantDistance; i++)
 		{
+			var entity = nearbyEnemies[i];
+
 			// Check if entity is attacking (animation check)
 			var attackAnimation = entity.AnimManager?.IsAnimationActive("attack") ?? false;
 			var hurtAnimation = entity.AnimManager?.IsAnimationActive("hurt") ?? false;
@@ -363,7 +380,8 @@ public class SituationalFactsCollector
 			// Entity is considered attacking if:
 			// 1. It's in attack animation, OR
 			// 2. It's running toward the player (walk animations excluded per request)
-			if (attackAnimation || hurtAnimation || (movingTowardPlayer && runAnimation))
+			if ((attackAnimation || hurtAnimation || (movingTowardPlayer && runAnimation))
+			    && IsEntityVisible(entity))
 			{
 				isCurrentlyAttacked = true;
 				break;
