@@ -29,5 +29,12 @@ public class MusicSource
 	/// <summary>What is on disk, once something has been installed.</summary>
 	[JsonProperty] public string? Installed { get; set; }
 
+	/// <summary>
+	/// The mod this source arrived inside, for music that ships as a mod's assets rather
+	/// than as a folder of ours. Such an entry is made and unmade by the mod being there,
+	/// not by anyone's hand - only its on/off switch is the player's.
+	/// </summary>
+	[JsonProperty] public string? Mod { get; set; }
+
 	public override string ToString() => $"{Id} ({Name})";
 }

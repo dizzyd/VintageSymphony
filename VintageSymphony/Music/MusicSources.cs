@@ -30,6 +30,7 @@ public class MusicSources
 	public const string GameSourceId = "game";
 
 	public static bool IsBuiltIn(MusicSource source) => source.Id == GameSourceId;
+	public static bool IsFromMod(MusicSource source) => source.Mod != null;
 
 	private readonly ILogger logger;
 
@@ -48,6 +49,12 @@ public class MusicSources
 
 	/// <summary>Sources that are enabled and actually have music sitting on disk.</summary>
 	public IEnumerable<MusicSource> Installed => Enabled.Where(HasMusicOnDisk);
+
+	/// <summary>
+	/// Sources with music to read: a folder on disk, or a mod's assets. A source with
+	/// neither is one that was never downloaded, and has nothing to say.
+	/// </summary>
+	public IEnumerable<MusicSource> Playable => Enabled.Where(s => HasMusicOnDisk(s) || IsFromMod(s));
 
 	public bool HasMusicOnDisk(MusicSource source) => Directory.Exists(MusicPathOf(source));
 
@@ -86,6 +93,60 @@ public class MusicSources
 
 		capi.Assets.Reload(AssetCategory.music);
 		logger.Notification("Music source '{0}' is now available from {1}", source.Id, path);
+	}
+
+	/// <summary>
+	/// Bring the list in line with the mods that are loaded. A mod that ships music for
+	/// this engine - a tracks.json under its music assets, or a musicconfig.json of our
+	/// tracks - is listed as a source the moment it is seen, so that installing such a
+	/// mod is all anyone has to do. When the mod goes, the entry we made for it goes too;
+	/// an entry somebody wrote themselves under the same name is left alone, whatever
+	/// happens to be loaded.
+	///
+	/// This can only run once assets are loaded, which is after the list was read from
+	/// disk - so it is the engine's pool build that calls it, not <see cref="Load"/>.
+	/// </summary>
+	/// <param name="domains">Asset domains found shipping music for this engine.</param>
+	/// <returns>Whether the list changed.</returns>
+	public bool SyncModSources(IEnumerable<string> domains, IModLoader modLoader)
+	{
+		var shipping = domains.ToHashSet();
+		var changed = false;
+
+		foreach (var gone in Sources.Where(s => IsFromMod(s) && !shipping.Contains(s.Id)).ToList())
+		{
+			Sources.Remove(gone);
+			logger.Notification("Mod '{0}' is no longer shipping music; dropped its source.", gone.Mod);
+			changed = true;
+		}
+
+		foreach (var domain in shipping)
+		{
+			if (Sources.Any(s => s.Id == domain))
+			{
+				continue;
+			}
+
+			// The domain is usually the mod id, but a mod may put its music under any
+			// name it likes, and then the name is all there is to go on.
+			var mod = modLoader.GetMod(domain);
+			Sources.Add(new MusicSource
+			{
+				Id = domain,
+				Name = mod?.Info.Name ?? domain,
+				Enabled = true,
+				Mod = mod?.Info.ModID ?? domain
+			});
+			logger.Notification("Mod '{0}' ships music for Vintage Symphony; listed it as a source.", domain);
+			changed = true;
+		}
+
+		if (changed)
+		{
+			Save();
+		}
+
+		return changed;
 	}
 
 	/// <summary>Forget a source and take its files with it.</summary>

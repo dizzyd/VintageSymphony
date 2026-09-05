@@ -207,9 +207,11 @@ public class ConfigurationDialog : GuiDialog
 				.AddDynamicText(StatusOf(source), CairoFont.WhiteDetailText(),
 					ElementBounds.Fixed(46, y + 24, getX - 56, 20), "vscfg_status_" + source.Id);
 
-			// The game's own music comes with the game, and a source with nowhere to
-			// download from is somebody's own folder: neither has anything to press.
-			if (!MusicSources.IsBuiltIn(source) && !string.IsNullOrWhiteSpace(source.Url) && !isBusy)
+			// The game's own music comes with the game, a mod's with the mod, and a source
+			// with nowhere to download from is somebody's own folder: none has anything
+			// to press.
+			if (!MusicSources.IsBuiltIn(source) && !MusicSources.IsFromMod(source)
+			    && !string.IsNullOrWhiteSpace(source.Url) && !isBusy)
 			{
 				// What is on disk decides, not what we remember installing: a folder
 				// someone filled in by hand is just as installed as one we fetched.
@@ -219,8 +221,9 @@ public class ConfigurationDialog : GuiDialog
 					ElementBounds.Fixed(getX, y + 8, getWidth, 28), EnumButtonStyle.Normal, ButtonKey(source));
 			}
 
-			// The game's own music cannot be removed - it would only come back.
-			if (!MusicSources.IsBuiltIn(source) && !isBusy)
+			// The game's own music cannot be removed - it would only come back. Nor can a
+			// mod's, for the same reason: the mod is what to remove.
+			if (!MusicSources.IsBuiltIn(source) && !MusicSources.IsFromMod(source) && !isBusy)
 			{
 				var captured = source;
 				var removing = source.Id == pendingRemoveId;
@@ -255,6 +258,11 @@ public class ConfigurationDialog : GuiDialog
 		if (MusicSources.IsBuiltIn(source))
 		{
 			return "comes with the game";
+		}
+
+		if (MusicSources.IsFromMod(source))
+		{
+			return "comes with the mod '" + source.Mod + "'";
 		}
 
 		if (!sources.HasMusicOnDisk(source))

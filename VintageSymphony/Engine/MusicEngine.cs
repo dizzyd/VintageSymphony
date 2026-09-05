@@ -166,6 +166,15 @@ public class MusicEngine : BaseModSystem
 
 		var sources = VintageSymphony.MusicSources;
 
+		// Mods shipping music for this engine list themselves: a tracks.json under their
+		// music assets, or a musicconfig.json the game has already parsed into our track
+		// type. The assets are loaded by now, which the source list's own load was too
+		// early for.
+		var shipping = LocalMusicLoader.DomainsShippingManifests(clientApi!)
+			.Concat(allTracks.OfType<MusicTrack>().Select(t => t.Location?.Domain).OfType<string>())
+			.Distinct();
+		sources.SyncModSources(shipping, clientApi.ModLoader);
+
 		// Enabled, not installed: a source's music may arrive from a folder we registered
 		// an origin for, or from a mod someone already had installed that happens to use
 		// the same domain. Both are that source's music.

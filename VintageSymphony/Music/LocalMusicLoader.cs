@@ -8,7 +8,8 @@ using MusicTrack = VintageSymphony.Engine.MusicTrack;
 namespace VintageSymphony.Music;
 
 /// <summary>
-/// Builds tracks for sources that use the simple tracks.json manifest.
+/// Builds tracks for sources that use the simple tracks.json manifest - a folder of ours
+/// on disk, or a mod that put one under its music assets.
 ///
 /// A source whose music folder holds the game's own musicconfig.json is left well alone -
 /// the game parses that itself and the tracks arrive through the patched music engine
@@ -36,8 +37,14 @@ public class LocalMusicLoader
 	{
 		var tracks = new List<MusicTrack>();
 
-		foreach (var source in sources.Installed)
+		foreach (var source in sources.Playable)
 		{
+			if (MusicSources.IsFromMod(source))
+			{
+				tracks.AddRange(LoadFromMod(source, musicEngine));
+				continue;
+			}
+
 			var musicPath = sources.MusicPathOf(source);
 
 			// The game's format wins if both are present - it is the more expressive one,
@@ -57,11 +64,74 @@ public class LocalMusicLoader
 
 			foreach (var entry in manifest.Tracks)
 			{
-				var track = BuildTrack(source, musicPath, entry, musicEngine);
+				var track = BuildTrack(source, entry, musicEngine,
+					file => File.Exists(Path.Combine(musicPath, file)), musicPath);
 				if (track != null)
 				{
 					tracks.Add(track);
 				}
+			}
+		}
+
+		return tracks;
+	}
+
+	/// <summary>
+	/// The asset domains of every mod shipping a tracks.json under its music assets.
+	/// Folders of ours are origins too, so they show up here as well - which is fine,
+	/// since they are already sources and the sync leaves them be.
+	/// </summary>
+	public static IEnumerable<string> DomainsShippingManifests(ICoreClientAPI capi)
+	{
+		var path = "music/" + TrackManifest.FileName;
+		return capi.Assets.GetLocations(path)
+			.Where(location => location.Path == path)
+			.Select(location => location.Domain)
+			.Distinct();
+	}
+
+	/// <summary>
+	/// A source that arrived inside a mod. Its files are assets rather than a folder we
+	/// can walk, so the manifest is read through the asset manager and a track's file is
+	/// looked for there too; nothing gets written, since there is nowhere of ours to
+	/// write it. The game's format takes precedence here as it does on disk.
+	/// </summary>
+	private List<MusicTrack> LoadFromMod(MusicSource source, IMusicEngine musicEngine)
+	{
+		var tracks = new List<MusicTrack>();
+
+		if (clientApi.Assets.Exists(new AssetLocation(source.Id, "music/" + GameMusicConfig)))
+		{
+			return LoadGameFormat(source, musicEngine);
+		}
+
+		var manifestLocation = new AssetLocation(source.Id, "music/" + TrackManifest.FileName);
+		var asset = clientApi.Assets.TryGet(manifestLocation);
+		if (asset == null)
+		{
+			return tracks;
+		}
+
+		TrackManifest? manifest;
+		try
+		{
+			manifest = JsonConvert.DeserializeObject<TrackManifest>(asset.ToText());
+		}
+		catch (Exception e)
+		{
+			logger.Error("Could not read {0}: {1}. Skipping the '{2}' music source.",
+				manifestLocation, e.Message, source.Id);
+			return tracks;
+		}
+
+		foreach (var entry in manifest?.Tracks ?? new List<TrackEntry>())
+		{
+			var track = BuildTrack(source, entry, musicEngine,
+				file => clientApi.Assets.Exists(new AssetLocation(source.Id, "music/" + file)),
+				"the assets of mod '" + source.Mod + "'");
+			if (track != null)
+			{
+				tracks.Add(track);
 			}
 		}
 
@@ -174,7 +244,10 @@ public class LocalMusicLoader
 		return manifest;
 	}
 
-	private MusicTrack? BuildTrack(MusicSource source, string musicPath, TrackEntry entry, IMusicEngine musicEngine)
+	/// <param name="hasFile">Whether a file the manifest names is actually there.</param>
+	/// <param name="where">Where that would be, for the warning when it is not.</param>
+	private MusicTrack? BuildTrack(MusicSource source, TrackEntry entry, IMusicEngine musicEngine,
+		System.Func<string, bool> hasFile, string where)
 	{
 		if (string.IsNullOrWhiteSpace(entry.File))
 		{
@@ -182,10 +255,10 @@ public class LocalMusicLoader
 			return null;
 		}
 
-		if (!File.Exists(Path.Combine(musicPath, entry.File)))
+		if (!hasFile(entry.File))
 		{
 			logger.Warning("'{0}' lists {1}, which is not in {2}; skipping it.",
-				source.Id, entry.File, musicPath);
+				source.Id, entry.File, where);
 			return null;
 		}
 
