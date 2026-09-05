@@ -56,7 +56,11 @@ public class MusicEngine : BaseModSystem
 			() => PlayerProperties,
 			() => clientApi!.ElapsedMilliseconds);
 
-		musicCurator = new MusicCurator(clientApi!, situationAssessor, playback);
+		musicCurator = new MusicCurator(
+			clientApi!,
+			() => situationAssessor.Assessments,
+			playback,
+			() => clientApi!.ElapsedMilliseconds);
 
 		// Set the initial music frequency
 		playback.SetMusicFrequency(ClientSettings.MusicFrequency);

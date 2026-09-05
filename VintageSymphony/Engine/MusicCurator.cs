@@ -8,13 +8,15 @@ namespace VintageSymphony.Engine;
 public class MusicCurator
 {
 	private readonly ICoreClientAPI clientApi;
-	private readonly SituationAssessor situationAssessor;
+	private readonly Func<IList<SituationAssessment>> getAssessments;
 	private readonly Playback playback;
 
 	private List<MusicTrack> tracks = new();
 	private readonly Dictionary<Situation, Playlist> playlists = new();
 	private readonly PlaylistSwitchGate switchGate;
-	public IList<SituationAssessment> Assessments => situationAssessor.Assessments;
+
+	/// <summary>The situations as the assessor ranks them, best first.</summary>
+	public IList<SituationAssessment> Assessments => getAssessments();
 	private ILogger Logger => clientApi.Logger;
 
 
@@ -28,12 +30,18 @@ public class MusicCurator
 		}
 	}
 
-	public MusicCurator(ICoreClientAPI clientApi, SituationAssessor situationAssessor, Playback playback)
+	/// <param name="getAssessments">The assessor's ranking, read afresh each update.</param>
+	/// <param name="getCurrentTimeMs">The clock the switch gate measures its holds by.</param>
+	public MusicCurator(
+		ICoreClientAPI clientApi,
+		Func<IList<SituationAssessment>> getAssessments,
+		Playback playback,
+		Func<long> getCurrentTimeMs)
 	{
-		this.situationAssessor = situationAssessor;
 		this.clientApi = clientApi;
+		this.getAssessments = getAssessments;
 		this.playback = playback;
-		switchGate = new PlaylistSwitchGate(() => clientApi.ElapsedMilliseconds);
+		switchGate = new PlaylistSwitchGate(getCurrentTimeMs);
 	}
 
 	private void InitializePlaylists()
