@@ -79,6 +79,9 @@ namespace VintageSymphony.Tests
             Assert.True(gate.Allows(fight, Situations.Situation.Dead, 19f, now), "death interrupts at once");
         }
 
+        static readonly Situations.Situation Fight = Situations.Situation.Fight;
+        static readonly Situations.Situation Danger = Situations.Situation.Danger;
+
         // ---- the facts --------------------------------------------------------
 
         /// <summary>
@@ -139,6 +142,71 @@ namespace VintageSymphony.Tests
             finally
             {
                 drifter.Die(EnumDespawnReason.Removed);
+                await Ticks(20);
+            }
+        }
+
+        /// <summary>
+        /// The report's own picture: a window, a weapon in hand, a drifter right outside.
+        /// Line of sight is blocked by the glass, but the first fix still let the distance
+        /// term and the weapon term score Fight at 0.59 here - ahead of Danger. Neither
+        /// may count without an enemy in sight, so Fight has nothing to score from.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task AnArmedPlayerBehindAWindowIsNotFighting()
+        {
+            World.Fill(P(6, 1, 6), P(10, 5, 10), "game:rock-granite");
+            World.Fill(P(7, 1, 7), P(9, 4, 9), "game:air");
+            World.Fill(P(10, 1, 7), P(10, 4, 9), "game:glass-plain");
+            await Player.Teleport(P(8, 1, 8));
+            await Player.Hold("game:club-generic-wood");
+            await Ticks(10);
+
+            await Until(() => Facts.IsHoldingWeapon, 200, "the club reads as a weapon");
+            await Until(() => float.IsPositiveInfinity(Facts.EnemyDistance), 200,
+                "no enemy before spawning one");
+
+            var drifter = World.SpawnEntity("game:drifter-normal", P(11, 1, 8));
+            Assert.NotNull(drifter, "drifter spawned");
+            try
+            {
+                await Until(() => Facts.EnemyDistance < 6f, 300, "the drifter is at the window");
+
+                // The first samples can still carry a score smoothed down from an earlier
+                // test, so the strict reading starts five seconds in.
+                var worstFight = 0f;
+                var settledFight = 0f;
+                var closest = float.PositiveInfinity;
+                var closestVisible = float.PositiveInfinity;
+                for (var i = 0; i < 30; i++)
+                {
+                    await Ticks(10);
+                    var fight = WeightedScore(Fight);
+                    worstFight = Math.Max(worstFight, fight);
+                    if (i >= 10)
+                    {
+                        settledFight = Math.Max(settledFight, fight);
+                    }
+                    closest = Math.Min(closest, Facts.EnemyDistance);
+                    closestVisible = Math.Min(closestVisible, Facts.VisibleEnemyDistance);
+                }
+
+                Log("drifter came within " + closest.ToString("0.0") +
+                    ", closest in sight " + closestVisible +
+                    ", Fight peaked at " + worstFight.ToString("0.00") +
+                    " and at " + settledFight.ToString("0.00") + " once settled, against Danger " +
+                    WeightedScore(Danger).ToString("0.00"));
+
+                Assert.Less(closest, 6f, "the drifter stayed at the window");
+                Assert.True(float.IsPositiveInfinity(closestVisible), "an enemy behind glass is never in sight");
+                Assert.Less(settledFight, 0.1f, "Fight's weighted score, armed, with a drifter outside the window");
+            }
+            finally
+            {
+                drifter.Die(EnumDespawnReason.Removed);
+                var hand = Player.Me.InventoryManager.ActiveHotbarSlot;
+                hand.Itemstack = null;
+                hand.MarkDirty();
                 await Ticks(20);
             }
         }
