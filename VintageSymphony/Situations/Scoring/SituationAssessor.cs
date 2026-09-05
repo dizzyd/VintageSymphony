@@ -11,11 +11,15 @@ public class SituationAssessor : IDisposable
 	private readonly List<SituationAssessment> assessments = new();
 	private readonly Dictionary<Situation, List<SituationAssessment>> aversions = new();
 
-	public IList<SituationAssessment> Assessments => assessments.AsReadOnly();
-	private readonly Dictionary<Situation, IEvaluator> evaluators = new();
+	/// <summary>
+	/// The assessments, best first, as of the last update. A fresh list each time rather
+	/// than the working list sorted in place: this is read on the main thread while
+	/// <see cref="Update"/> runs on its own, and enumerating a list mid-sort throws.
+	/// </summary>
+	private volatile IList<SituationAssessment> ranked;
 
-	private readonly Comparison<SituationAssessment> scoreComparator =
-		(x, y) => y.WeightedScore.CompareTo(x.WeightedScore);
+	public IList<SituationAssessment> Assessments => ranked;
+	private readonly Dictionary<Situation, IEvaluator> evaluators = new();
 
 	private readonly List<IEvaluator> allEvaluators = TypeResolver.ResolveAll<IEvaluator>();
 
@@ -41,6 +45,8 @@ public class SituationAssessor : IDisposable
 				}
 			}
 		}
+
+		ranked = assessments.AsReadOnly();
 
 		foreach (var situation in Enum.GetValues<Situation>())
 		{
@@ -83,7 +89,7 @@ public class SituationAssessor : IDisposable
 			assessment.Score = ExponentialSmoothing(assessment, deltaTimeS, assessment.Score, newCertainty);
 		}
 
-		assessments.Sort(scoreComparator);
+		ranked = assessments.OrderByDescending(a => a.WeightedScore).ToList().AsReadOnly();
 	}
 
 	private static float ExponentialSmoothing(SituationAssessment assessment, float deltaTimeS, float oldCertainty,
