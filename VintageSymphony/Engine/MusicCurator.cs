@@ -95,11 +95,19 @@ public class MusicCurator
 			.TakeWhile(s => s.WeightedScore >= scoreThreshold);
 	}
 
+	/// <summary>
+	/// The best-scoring situation that has something to play. Every situation owns a
+	/// playlist, so testing for the playlist's existence - as this used to - made the
+	/// leader win regardless and left the near-tie fallthrough above doing nothing: a
+	/// pack with no fight music sat in silence through every fight. Silence is the one
+	/// situation whose empty playlist is the point.
+	/// </summary>
 	private Playlist? GetBestPlaylistForCurrentSituation()
 	{
 		foreach (var assessment in GetHighestAssessments())
 		{
-			if (playlists.TryGetValue(assessment.Situation, out var playlist))
+			if (playlists.TryGetValue(assessment.Situation, out var playlist)
+			    && (playlist.Tracks.Count > 0 || assessment.Situation == Situation.Silence))
 			{
 				return playlist;
 			}
