@@ -383,5 +383,81 @@ namespace VintageSymphony.Tests
             }
         }
 
+        /// <summary>
+        /// The other way a house is closed: a door. Placed the way a player places one -
+        /// through the block's own TryPlaceBlock, from inside the room - so it hangs in the
+        /// doorway facing the right way and brings its upper half with it. Both halves are
+        /// wood to the line-of-sight check, so a drifter at the door is an unseen one.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task AnArmedPlayerBehindAClosedDoorIsNotFighting()
+        {
+            World.Fill(P(6, 1, 6), P(10, 5, 10), "game:rock-granite");
+            World.Fill(P(7, 1, 7), P(9, 4, 9), "game:air");
+            var doorway = P(10, 1, 8);
+            World.SetBlock("game:air", doorway);
+            World.SetBlock("game:air", doorway.UpCopy());
+            await Player.Teleport(P(8, 1, 8));
+            await Player.Hold("game:club-generic-wood");
+            await Ticks(10);
+
+            var door = Sapi.World.GetBlock(new AssetLocation("game:door-solid-oak"));
+            Assert.NotNull(door, "the oak door block");
+            var placing = new BlockSelection
+            {
+                Position = doorway.Copy(),
+                Face = BlockFacing.WEST,
+                HitPosition = new Vec3d(0, 0.5, 0.5)
+            };
+            string failure = null;
+            Assert.True(door.TryPlaceBlock(Sapi.World, Player.Me, new ItemStack(door), placing, ref failure),
+                "the door is placed: " + failure);
+            await Ticks(5);
+            Log("doorway holds " + World.BlockCode(doorway) + " under " + World.BlockCode(doorway.UpCopy()));
+            Assert.True(World.BlockCode(doorway.UpCopy()).StartsWith("game:multiblock"),
+                "the door's upper half is in place");
+
+            await Until(() => Facts.IsHoldingWeapon, 200, "the club reads as a weapon");
+            await Until(() => float.IsPositiveInfinity(Facts.EnemyDistance), 200,
+                "no enemy before spawning one");
+
+            var drifter = World.SpawnEntity("game:drifter-normal", P(11, 1, 8));
+            Assert.NotNull(drifter, "drifter spawned");
+            try
+            {
+                await Until(() => Facts.EnemyDistance < 6f, 300, "the drifter is at the door");
+
+                var settledFight = 0f;
+                var closest = float.PositiveInfinity;
+                var closestVisible = float.PositiveInfinity;
+                for (var i = 0; i < 30; i++)
+                {
+                    await Ticks(10);
+                    if (i >= 10)
+                    {
+                        settledFight = Math.Max(settledFight, WeightedScore(Fight));
+                    }
+                    closest = Math.Min(closest, Facts.EnemyDistance);
+                    closestVisible = Math.Min(closestVisible, Facts.VisibleEnemyDistance);
+                }
+
+                Log("drifter came within " + closest.ToString("0.0") +
+                    ", closest in sight " + closestVisible +
+                    ", Fight at " + settledFight.ToString("0.00") + " once settled, against Danger " +
+                    WeightedScore(Danger).ToString("0.00"));
+
+                Assert.Less(closest, 6f, "the drifter stayed at the door");
+                Assert.True(float.IsPositiveInfinity(closestVisible), "an enemy behind a door is never in sight");
+                Assert.Less(settledFight, 0.1f, "Fight's weighted score, armed, with a drifter outside the door");
+            }
+            finally
+            {
+                drifter.Die(EnumDespawnReason.Removed);
+                var hand = Player.Me.InventoryManager.ActiveHotbarSlot;
+                hand.Itemstack = null;
+                hand.MarkDirty();
+                await Ticks(20);
+            }
+        }
     }
 }
