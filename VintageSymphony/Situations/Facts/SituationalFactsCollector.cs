@@ -41,6 +41,7 @@ public class SituationalFactsCollector
 	private ICoreClientAPI clientApi;
 	private long timeLastDamageTaken = -1L;
 	private long timeLastAttackDetected = -1L;
+	private int lastHurtCounter;
 
 	private const int
 		AttackCooldownSeconds = 2; // Time in seconds that isAttacked remains true after enemies stop attacking
@@ -60,6 +61,7 @@ public class SituationalFactsCollector
 	{
 		clientApi = VintageSymphony.ClientApi;
 		this.attributeStorage = attributeStorage;
+		lastHurtCounter = PlayerEntity.WatchedAttributes.GetInt("onHurtCounter");
 		PlayerEntity.WatchedAttributes.RegisterModifiedListener("onHurt", OnPlayerHurt);
 		clientApi.Event.BlockChanged += OnBlockChanged;
 		worldHeight = clientApi.World.BlockAccessor.MapSize.Y;
@@ -90,8 +92,23 @@ public class SituationalFactsCollector
 		}
 	}
 
+	/// <summary>
+	/// The onHurt attribute is modified whenever the player's attributes are synced whole
+	/// - on joining, on teleporting - not only when they are hurt, so the game's own
+	/// health behaviour checks that the hit counter moved before believing it. Without
+	/// the same check every teleport read as a wound, and Danger and Fight carried it for
+	/// the next minute.
+	/// </summary>
 	private void OnPlayerHurt()
 	{
+		var attributes = PlayerEntity.WatchedAttributes;
+		int counter = attributes.GetInt("onHurtCounter");
+		if (attributes.GetFloat("onHurt") == 0f || counter == lastHurtCounter)
+		{
+			return;
+		}
+
+		lastHurtCounter = counter;
 		timeLastDamageTaken = GetNow();
 		facts.SecondsSinceLastDamage = 0;
 	}
@@ -359,7 +376,12 @@ public class SituationalFactsCollector
 			timeLastAttackDetected = now;
 		}
 
-		facts.SecondsSinceLastAttack = (float)(now - timeLastAttackDetected) / 1000L;
+		// Never attacked is not "attacked when the world started": measured from the -1
+		// sentinel, the seconds since the last attack were the seconds since joining, and
+		// Fight's attack term read as a full-blown attack for the first ten of them.
+		facts.SecondsSinceLastAttack = timeLastAttackDetected >= 0
+			? (float)(now - timeLastAttackDetected) / 1000L
+			: float.PositiveInfinity;
 	}
 
 	private void UpdateRiftDistance()
