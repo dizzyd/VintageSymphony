@@ -87,6 +87,43 @@ namespace VintageSymphony.Tests
             }
         }
 
+        /// <summary>
+        /// The one setting that is not a source goes through the same draft: nothing
+        /// changes until the dialog closes, and what changes is written to disk.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task ThePlaylistSwitchIsAppliedOnCloseAndSaved()
+        {
+            await OnClient();
+
+            var dialog = VS.ConfigurationDialog;
+            var config = VS.Configuration;
+            var was = config.HonourGamePlaylists;
+            try
+            {
+                await OpenDialog(dialog);
+                await ClickSwitch(dialog, Config.ConfigurationDialog.PlaylistsSwitchKey);
+                Assert.Equal(was, config.HonourGamePlaylists, "untouched while the dialog is open");
+
+                await CloseDialog(dialog);
+                Assert.Equal(!was, config.HonourGamePlaylists, "applied on close");
+
+                var saved = Capi.LoadModConfig<Config.Configuration>("vintagesymphonyforked.json");
+                Assert.NotNull(saved, "the config file");
+                Assert.Equal(!was, saved.HonourGamePlaylists, "written to the config file");
+
+                await OpenDialog(dialog);
+                await ClickSwitch(dialog, Config.ConfigurationDialog.PlaylistsSwitchKey);
+                await CloseDialog(dialog);
+                Assert.Equal(was, config.HonourGamePlaylists, "applied on close again");
+            }
+            finally
+            {
+                if (dialog.IsOpened()) await CloseDialog(dialog);
+                config.HonourGamePlaylists = was;
+            }
+        }
+
         // ---- helpers ----------------------------------------------------------
 
         static async Task OpenDialog(GuiDialog dialog)

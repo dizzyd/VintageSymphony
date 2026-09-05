@@ -53,9 +53,31 @@ public sealed class MusicTrackWrapper : MusicTrack
 		wrappedTrack.Initialize(assetManager, capi, musicEngine);
 	}
 
+	/// <summary>
+	/// The game's verdict on its own track, with one rule optionally waived: the
+	/// survival/creative playlist split, see <see cref="Config.Configuration.HonourGamePlaylists"/>.
+	/// The game returns the first rule that fails, so the playlist cannot be skipped by
+	/// looking at the verdict; the track is asked as though it were on every playlist,
+	/// and put back the way it was. Selection runs on the main thread, nothing else reads
+	/// the field while it is changed, and the game's own loop is disabled by the patch.
+	/// </summary>
 	public override bool ShouldPlay(TrackedPlayerProperties props, ClimateCondition conds, BlockPos pos)
 	{
-		return wrappedTrack.ShouldPlay(props, conds, pos);
+		if (wrappedTrack is not SurfaceMusicTrack surface || VintageSymphony.Configuration.HonourGamePlaylists)
+		{
+			return wrappedTrack.ShouldPlay(props, conds, pos);
+		}
+
+		var onPlayList = surface.OnPlayList;
+		surface.OnPlayList = "*";
+		try
+		{
+			return surface.ShouldPlay(props, conds, pos);
+		}
+		finally
+		{
+			surface.OnPlayList = onPlayList;
+		}
 	}
 
 	public override void BeginPlay(TrackedPlayerProperties props)

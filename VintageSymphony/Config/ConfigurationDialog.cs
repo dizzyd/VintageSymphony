@@ -31,6 +31,7 @@ public class ConfigurationDialog : GuiDialog
 	private const string OkButtonKey = "vscfg_ok";
 	private const string PrevKey = "vscfg_prev";
 	private const string NextKey = "vscfg_next";
+	public const string PlaylistsSwitchKey = "vscfg_playlists";
 
 	private readonly Configuration configuration;
 	private readonly ConfigurationLoader configurationLoader;
@@ -39,6 +40,9 @@ public class ConfigurationDialog : GuiDialog
 	private readonly AddSourceDialog addSourceDialog;
 
 	private readonly Dictionary<string, bool> draftSourceEnabled = new();
+
+	/// <summary>Drafted like the source switches: read when the dialog closes.</summary>
+	private bool draftHonourPlaylists;
 
 	/// <summary>Status text per source, so a download can report itself where it belongs.</summary>
 	private readonly Dictionary<string, string> statusText = new();
@@ -77,7 +81,8 @@ public class ConfigurationDialog : GuiDialog
 		// about as pages are turned - but still shrinks to fit when there are only a
 		// couple of sources.
 		var rowsShown = Math.Max(1, Math.Min(sources.Sources.Count, RowsPerPage));
-		var listTop = 40;
+		var settingsY = 40;
+		var listTop = settingsY + RowHeight + 6;
 		var listHeight = rowsShown * RowHeight;
 
 		var pagerY = listTop + listHeight + 6;
@@ -93,8 +98,8 @@ public class ConfigurationDialog : GuiDialog
 		// The sizing child wants a height, not the coordinate its bottom sits at. It also
 		// stops short of the buttons, because the frame will add a padding below them
 		// whether or not anything asked for it.
-		var sizing = ElementBounds.Fixed(0, listTop, DialogWidth,
-			addY + 30 + Margin - listTop - 2 * padding);
+		var sizing = ElementBounds.Fixed(0, settingsY, DialogWidth,
+			addY + 30 + Margin - settingsY - 2 * padding);
 
 		var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.ElementToDialogPadding);
 		bgBounds.BothSizing = ElementSizing.FitToChildren;
@@ -105,7 +110,8 @@ public class ConfigurationDialog : GuiDialog
 			.AddShadedDialogBG(bgBounds)
 			.AddDialogTitleBar("Vintage Symphony configuration", () => TryClose());
 
-		AddSourceRows();
+		AddSettingsRows(settingsY);
+		AddSourceRows(listTop);
 
 		// A page at a time rather than a scrolling list: GuiElementClip only scissors the
 		// interactive render pass, and switches and static text bake into the composed
@@ -153,9 +159,29 @@ public class ConfigurationDialog : GuiDialog
 				SingleComposer.GetSwitch(SwitchKey(source)).On = enabled;
 			}
 		}
+
+		SingleComposer.GetSwitch(PlaylistsSwitchKey).On = draftHonourPlaylists;
 	}
 
-	private void AddSourceRows()
+	/// <summary>
+	/// Settings that are not a source, above the sources. One so far: whether the game's
+	/// own music keeps to the survival/creative split the game gives it. Same shape as a
+	/// source row.
+	/// </summary>
+	private void AddSettingsRows(int y)
+	{
+		var padding = (int)GuiStyle.ElementToDialogPadding;
+		var textWidth = DialogWidth + 2 * padding - Margin - 46;
+
+		SingleComposer
+			.AddSwitch(state => draftHonourPlaylists = state,
+				ElementBounds.Fixed(Margin, y + 6, 10, 30), PlaylistsSwitchKey)
+			.AddStaticText("Respect the survival/creative music split",
+				CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
+				ElementBounds.Fixed(46, y + 10, textWidth, 24));
+	}
+
+	private void AddSourceRows(int listTop)
 	{
 		var padding = (int)GuiStyle.ElementToDialogPadding;
 		var usableWidth = DialogWidth + 2 * padding;
@@ -169,7 +195,7 @@ public class ConfigurationDialog : GuiDialog
 		var row = 0;
 		foreach (var source in PageOfSources())
 		{
-			var y = 40 + row * RowHeight;
+			var y = listTop + row * RowHeight;
 			var isBusy = source.Id == busySourceId;
 
 			SingleComposer
@@ -354,6 +380,7 @@ public class ConfigurationDialog : GuiDialog
 		base.OnGuiOpened();
 
 		pendingRemoveId = null;
+		draftHonourPlaylists = configuration.HonourGamePlaylists;
 		draftSourceEnabled.Clear();
 		foreach (var source in sources.Sources)
 		{
@@ -373,6 +400,13 @@ public class ConfigurationDialog : GuiDialog
 
 	private void Apply()
 	{
+		// Read at the next selection, so the pool need not be rebuilt for it.
+		if (draftHonourPlaylists != configuration.HonourGamePlaylists)
+		{
+			configuration.HonourGamePlaylists = draftHonourPlaylists;
+			configurationLoader.SaveConfiguration(configuration);
+		}
+
 		var changed = false;
 
 		foreach (var source in sources.Sources)

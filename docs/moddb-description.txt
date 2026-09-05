@@ -55,6 +55,11 @@ original author's release page.
 The music lives in ModData/vintagesymphonyforked/sources/ inside your Vintage Story data
 folder, one folder per source.
 
+The game's own music follows the game's own rules - village tracks play in villages,
+and so on. The game also marks each track for survival, creative or both; the config
+dialog has a switch for whether to keep that split. Off, the default, all of them play
+in either mode.
+
 == About the music ==
 
 The pack above is royalty free, and every track in it is credited at the bottom of this page.

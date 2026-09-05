@@ -84,6 +84,58 @@ namespace VintageSymphony.Tests
             Assert.Equal(1, vanilla.Starts, "eligible track starts once");
         }
 
+        /// <summary>
+        /// The game marks each of its tracks for survival, creative or both. Whether the
+        /// mod keeps that split is a setting; the game's other rules stay either way.
+        /// </summary>
+        [VsTest, RequiresClient]
+        public async Task ThePlaylistSplitIsASetting()
+        {
+            await OnClient();
+
+            var props = VS.ClientMain.playerProperties;
+            var otherMode = props.PlayListCode == "creative" ? "survival" : "creative";
+            var track = new SurfaceMusicTrack
+            {
+                Location = new AssetLocation("game", "playlist-test"),
+                OnPlayList = otherMode,
+                MinSunlight = 0
+            };
+            var gameEngine = VS.ClientMain.clientSystems.OfType<SystemMusicEngine>().First();
+            track.Initialize(Capi.Assets, Capi, gameEngine);
+            var wrapper = new Engine.MusicTrackWrapper(track);
+
+            var wasAllowed = SurfaceMusicTrack.ShouldPlayMusic;
+            var wasCooldown = SurfaceMusicTrack.globalCooldownUntilMs;
+            var wasFrequency = ClientSettings.MusicFrequency;
+            var wasHonoured = VS.Configuration.HonourGamePlaylists;
+            try
+            {
+                // Everything but the playlist opened up: full hours, no cooldown.
+                SurfaceMusicTrack.ShouldPlayMusic = true;
+                ClientSettings.MusicFrequency = 3;
+                SurfaceMusicTrack.globalCooldownUntilMs = 0;
+                var pos = Capi.World.Player.Entity.Pos.AsBlockPos;
+                var climate = Capi.World.BlockAccessor.GetClimateAt(pos);
+                Assert.Equal("notonplaylist", track.GetPlayTestCode(props, climate, pos),
+                    "the game refuses a track written for the other mode");
+
+                VS.Configuration.HonourGamePlaylists = true;
+                Assert.False(wrapper.ShouldPlay(props, climate, pos), "honoured: the split holds");
+
+                VS.Configuration.HonourGamePlaylists = false;
+                Assert.True(wrapper.ShouldPlay(props, climate, pos), "waived: the track may play");
+                Assert.Equal(otherMode, track.OnPlayList, "the track's own playlist is put back");
+            }
+            finally
+            {
+                VS.Configuration.HonourGamePlaylists = wasHonoured;
+                ClientSettings.MusicFrequency = wasFrequency;
+                SurfaceMusicTrack.ShouldPlayMusic = wasAllowed;
+                SurfaceMusicTrack.globalCooldownUntilMs = wasCooldown;
+            }
+        }
+
         static Engine.Playback Playback(TrackedPlayerProperties props) =>
             new Engine.Playback(Capi.Logger, new Engine.TrackCooldownManager(() => 0L),
                 () => props, () => 0L);
