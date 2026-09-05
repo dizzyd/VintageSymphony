@@ -343,23 +343,24 @@ namespace VintageSymphony.Tests
 
 
         /// <summary>
-        /// Runs the body with the game's own music loaded and audible, and puts the
-        /// player's settings back afterwards. The mod's own pack is a 200MB download the
-        /// test box need not have; the vanilla tracks exercise the same paths.
+        /// Runs the body with music playing, and puts the player's settings back afterwards.
+        ///
+        /// The pool is the vanilla audio opened up by <see cref="AlwaysPlayable"/>, not the
+        /// game's tracks themselves: wrapped vanilla tracks now answer to the game's own
+        /// rules - its start-up cooldown, its hour windows, its playlists - so whether one
+        /// of them fits the moment the box happens to be in is the game's business, and
+        /// these tests are about stopping and skipping. The mod's own pack is a 200MB
+        /// download the test box need not have.
         /// </summary>
         static async Task WithMusicPlaying(System.Func<Engine.MusicEngine, List<Engine.MusicTrack>, Task> body)
         {
             var engine = VS.MusicEngine;
             var curator = Curator(engine);
-            var gameSource = VS.MusicSources.Sources.First(s => s.Id == "game");
-            var wasLoadingGameMusic = gameSource.Enabled;
             var wasMusicLevel = ClientSettings.MusicLevel;
 
             try
             {
-                gameSource.Enabled = true;
-                curator.Tracks = new List<Engine.MusicTrack>();
-                engine.LoadTracks(VanillaTracks(), Vanilla());
+                curator.Tracks = VanillaTracks().OfType<SurfaceMusicTrack>().Select(AlwaysPlayable).ToList();
                 Assert.Greater(curator.Tracks.Count, 1, "tracks to choose between");
 
                 ClientSettings.MusicLevel = 20;
@@ -378,7 +379,9 @@ namespace VintageSymphony.Tests
                 engine.Playback.StopTrack(0f);
                 engine.Playback.SetMusicFrequency(ClientSettings.MusicFrequency);
                 ClientSettings.MusicLevel = wasMusicLevel;
-                gameSource.Enabled = wasLoadingGameMusic;
+
+                // Hand the pool back to the patch to refill, the way a config change does.
+                curator.Tracks = new List<Engine.MusicTrack>();
             }
         }
 

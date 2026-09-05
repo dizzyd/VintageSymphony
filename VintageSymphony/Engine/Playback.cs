@@ -176,8 +176,20 @@ public class Playback
 
 		var playerPosition = VintageSymphony.ClientApi.World.Player.Entity.Pos.AsBlockPos;
 		var climateCondition = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(playerPosition);
+		var props = getPlayerProperties();
 
-		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, getPlayerProperties(),
+		// Wrapped tracks keep the game's own eligibility rules - playlist, structure,
+		// temporal stability, hours - along with the game's cooldowns and hour windows.
+		// The wrapper carries none of those fields, so testing our restrictions against
+		// it passed everything: the village tracks, priority 1.5 and only meant to play
+		// inside a village, won nearly every draw, and the game's ContinuePlay faded each
+		// one out a second in. Custom tracks use our own restrictions and cooldowns.
+		if (track is MusicTrackWrapper)
+		{
+			return track.ShouldPlay(props, climateCondition, playerPosition);
+		}
+
+		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, props,
 			climateCondition, playerPosition);
 	}
 

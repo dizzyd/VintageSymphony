@@ -35,6 +35,8 @@ namespace VintageSymphony.Tests
             var gameSource = VS.MusicSources.Sources.First(s => s.Id == "game");
             var wasLoadingGameMusic = gameSource.Enabled;
             var wasMusicLevel = ClientSettings.MusicLevel;
+            var wasMusicFrequency = ClientSettings.MusicFrequency;
+            var wasCalendarHours = await CalendarHours();
             try
             {
                 // The harness runs silent and the game's own music is off by default, so
@@ -72,6 +74,25 @@ namespace VintageSymphony.Tests
 
                 ClientSettings.MusicLevel = 20;
 
+                // Wrapped tracks answer to the game's own eligibility rules, so make the
+                // moment one the game would play music in: midday, and the "very often"
+                // frequency, at which the game uses each track's full hour range rather
+                // than a narrow window drawn at random, and clears its start-up cooldown.
+                await SetCalendarTo(500 * 24 + 12.5);
+                ClientSettings.MusicFrequency = 3;
+                SurfaceMusicTrack.globalCooldownUntilMs = 0;
+
+                var props = VS.ClientMain.playerProperties;
+                var pos = Capi.World.Player.Entity.Pos.AsBlockPos;
+                var climate = Capi.World.BlockAccessor.GetClimateAt(pos);
+                var verdicts = vanilla.OfType<SurfaceMusicTrack>()
+                    .ToDictionary(t => t, t => t.GetPlayTestCode(props, climate, pos));
+                var playable = verdicts.Where(v => v.Value == "ok").Select(v => v.Key.Name).ToHashSet();
+                Log("the game's verdicts: " + string.Join("  ", verdicts.Values
+                    .GroupBy(v => v).OrderByDescending(g => g.Count())
+                    .Select(g => g.Key + "=" + g.Count())));
+                Assert.Greater(playable.Count, 0, "vanilla tracks the game itself would play now");
+
                 // The engine holds its playback loop for 10s after the player joins, and
                 // Until polls per tick rather than per second - so this budget has to
                 // cover that delay, or the test result depends on how long the tests
@@ -86,6 +107,8 @@ namespace VintageSymphony.Tests
                 await Until(() => engine.CurrentMusicTrack != null, 900, "a track was selected");
 
                 var track = engine.CurrentMusicTrack;
+                Assert.True(playable.Contains(track.Name),
+                    "the selected track " + track.Name + " is one the game would play");
                 await Until(() => track.IsPlaying, 300, "the selected track starts playing");
 
                 Log("playing " + track.Name + " [" + track.Situation + "] from the " +
@@ -98,11 +121,29 @@ namespace VintageSymphony.Tests
             {
                 engine.Playback.StopTrack(0f);
                 ClientSettings.MusicLevel = wasMusicLevel;
+                ClientSettings.MusicFrequency = wasMusicFrequency;
                 gameSource.Enabled = wasLoadingGameMusic;
+                await SetCalendarTo(wasCalendarHours);
             }
         }
 
         // ---- helpers ----------------------------------------------------------
+
+        // The calendar is the server's; these hop over and come back.
+        static async Task<double> CalendarHours()
+        {
+            await OnServer();
+            var hours = Sapi.World.Calendar.TotalHours;
+            await OnClient();
+            return hours;
+        }
+
+        static async Task SetCalendarTo(double totalHours)
+        {
+            await OnServer();
+            await World.SetCalendarTo(totalHours);
+            await OnClient();
+        }
 
         static Engine.MusicCurator Curator(Engine.MusicEngine engine)
         {
