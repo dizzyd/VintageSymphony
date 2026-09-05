@@ -25,62 +25,102 @@ namespace VintageSymphony.Tests
 
         // ---- the gate ---------------------------------------------------------
 
+        static readonly Situations.Situation Fight = Situations.Situation.Fight;
+        static readonly Situations.Situation Idle = Situations.Situation.Idle;
+        static readonly Situations.Situation Danger = Situations.Situation.Danger;
+
         /// <summary>
-        /// Pure logic on a fake clock. Combat music is held while the enemy pauses; calm
-        /// music yields to a fight after the dwell alone; death interrupts at once.
+        /// Pure logic on a fake clock. Entering a playlist takes a clear lead held for
+        /// the dwell, and a lapse in the lead starts the dwell over. Idle is not a
+        /// dynamic situation, so nothing here waits on a minimum play time.
         /// </summary>
         [VsTest]
-        public async Task TheGateHoldsCombatMusicAgainstAFlicker()
+        public async Task EnteringAPlaylistTakesAClearLeadForTheDwell()
         {
             await Ticks(1);
-
-            var fight = Situations.Situation.Fight;
-            var idle = Situations.Situation.Idle;
-            const float clearLead = 0.3f;
-
             long now = 100_000L;
             var gate = new Engine.PlaylistSwitchGate(() => now);
 
-            Assert.True(gate.Allows(null, fight, 0f, null), "anything may start when nothing is selected");
+            Assert.True(gate.Allows(null, Fight, 0f, null), "anything may start when nothing is selected");
+            Assert.False(gate.Allows(Idle, Idle, 0f, now), "no change wanted");
 
-            var fightStarted = now;
-            Assert.False(gate.Allows(fight, fight, 0f, fightStarted), "no change wanted");
+            Assert.False(gate.Allows(Idle, Fight, 0.3f, now), "the tick the lead appears");
+            now += 2_000L;
+            Assert.False(gate.Allows(Idle, Fight, 0.3f, now), "2s into the dwell");
+            now += 1_000L;
+            Assert.True(gate.Allows(Idle, Fight, 0.3f, now), "the dwell is over");
 
-            // Idle takes a clear lead. Not on that tick, not during the dwell, and not once
-            // the dwell is over while the combat track is under its minimum play time.
-            Assert.False(gate.Allows(fight, idle, clearLead, fightStarted), "the tick the lead appears");
-            for (var s = 1; s <= 3; s++)
-            {
-                now += 1_000L;
-                Assert.False(gate.Allows(fight, idle, clearLead, fightStarted), "dwell, " + s + "s in");
-            }
+            // A lapse - the score dipped for a tick - starts the dwell over.
+            Assert.False(gate.Allows(Idle, Fight, 0.3f, now), "a new lead");
+            now += 2_000L;
+            Assert.False(gate.Allows(Idle, Fight, 0f, now), "the lead lapses");
+            Assert.False(gate.Allows(Idle, Fight, 0.3f, now), "and is back");
+            now += 2_000L;
+            Assert.False(gate.Allows(Idle, Fight, 0.3f, now), "2s into the restarted dwell");
+            now += 1_000L;
+            Assert.True(gate.Allows(Idle, Fight, 0.3f, now), "the restarted dwell is over");
 
-            now += 10_000L;
-            Assert.False(gate.Allows(fight, idle, clearLead, fightStarted),
-                "led through the dwell, but the combat track is 13s into a 30s minimum");
-
-            // The lead lapses for a tick - the drifter lunged again - and the dwell starts over.
-            now += 20_000L;
-            Assert.False(gate.Allows(fight, idle, 0.05f, fightStarted), "a lead under the margin never counts");
-            Assert.False(gate.Allows(fight, idle, clearLead, fightStarted), "lead back: the dwell starts over");
-            now += Engine.PlaylistSwitchGate.DwellMs;
-            Assert.True(gate.Allows(fight, idle, clearLead, fightStarted),
-                "led for the dwell with the track past its minimum");
-
-            // The other way round is not held for the track: a fight interrupts calm music
-            // as soon as it has led for the dwell.
-            var idleStarted = now;
-            Assert.False(gate.Allows(idle, fight, clearLead, idleStarted), "the tick the fight appears");
-            now += Engine.PlaylistSwitchGate.DwellMs;
-            Assert.True(gate.Allows(idle, fight, clearLead, idleStarted),
-                "calm music yields after the dwell, minimum play time notwithstanding");
-
-            // Death does not wait for anything.
-            Assert.True(gate.Allows(fight, Situations.Situation.Dead, 19f, now), "death interrupts at once");
+            Assert.True(gate.Allows(Fight, Situations.Situation.Dead, 19f, now), "death interrupts at once");
         }
 
-        static readonly Situations.Situation Fight = Situations.Situation.Fight;
-        static readonly Situations.Situation Danger = Situations.Situation.Danger;
+        /// <summary>
+        /// The hold that stops the flip-flop: a combat track plays for at least thirty
+        /// seconds however clearly something else leads.
+        /// </summary>
+        [VsTest]
+        public async Task CombatMusicPlaysForItsMinimumHoweverClearTheLead()
+        {
+            await Ticks(1);
+            long now = 100_000L;
+            var gate = new Engine.PlaylistSwitchGate(() => now);
+            var fightStarted = now;
+
+            Assert.False(gate.Allows(Fight, Idle, 0.3f, fightStarted), "the tick the lead appears");
+            now += 3_000L;
+            Assert.False(gate.Allows(Fight, Idle, 0.3f, fightStarted), "dwell over, track 3s into a 30s minimum");
+            now += 10_000L;
+            Assert.False(gate.Allows(Fight, Idle, 0.3f, fightStarted), "13s in");
+            now += 17_000L;
+            Assert.True(gate.Allows(Fight, Idle, 0.3f, fightStarted), "30s in");
+        }
+
+        /// <summary>
+        /// The exit the first version of the gate did not have. A drifter loitering three
+        /// blocks outside the wall after a fight leaves Danger ahead of Fight by about
+        /// 0.13 - under the margin - and that held combat music for as long as the
+        /// drifter stayed. A lead of any size that persists for ten seconds now counts.
+        /// </summary>
+        [VsTest]
+        public async Task APersistentLeadUnderTheMarginStillEndsCombat()
+        {
+            await Ticks(1);
+            long now = 100_000L;
+            var gate = new Engine.PlaylistSwitchGate(() => now);
+            var fightStarted = now - 60_000L;
+            const float thinLead = 0.13f;
+
+            Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "the tick the lead appears");
+            now += 3_000L;
+            Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "3s: no margin, so no dwell");
+            now += 6_000L;
+            Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "9s of a thin lead");
+            now += 1_000L;
+            Assert.True(gate.Allows(Fight, Danger, thinLead, fightStarted), "10s of a thin lead");
+
+            // The persistence is of the lead, not the leader: trailing Danger and then
+            // Idle is still trailing. And a tick without any lead starts it over.
+            Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "a new thin lead");
+            now += 6_000L;
+            Assert.False(gate.Allows(Fight, Idle, 0.05f, fightStarted), "6s, now behind Idle");
+            now += 4_000L;
+            Assert.True(gate.Allows(Fight, Idle, 0.05f, fightStarted), "10s behind one thing or another");
+
+            Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "a new thin lead");
+            now += 9_000L;
+            Assert.False(gate.Allows(Fight, Danger, 0f, fightStarted), "9s, then Fight draws level");
+            now += 1_000L;
+            Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "a fresh lead starts the count over");
+        }
 
         // ---- the facts --------------------------------------------------------
 
