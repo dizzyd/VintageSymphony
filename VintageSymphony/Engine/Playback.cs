@@ -73,6 +73,14 @@ public class Playback
 	/// <summary>The track that played last, kept so the next one need not be it again.</summary>
 	private MusicTrack? lastPlayedTrack;
 
+	private long currentTrackStartedMs;
+
+	/// <summary>
+	/// When the sounding track started, or null while nothing is sounding. The curator
+	/// reads it to give a track its minimum play time before switching away.
+	/// </summary>
+	public long? PlayingSinceMs => IsPlayingTrack() ? currentTrackStartedMs : null;
+
 	public Playback(
 		ILogger logger,
 		TrackCooldownManager trackCooldownManager,
@@ -253,6 +261,7 @@ public class Playback
 	{
 		lastPlayedTrack = track;
 		CurrentTrack = track;
+		currentTrackStartedMs = getCurrentTimeMs();
 		CurrentTrack.BeginPlay(getPlayerProperties());
 		if (!track.DisableCooldown)
 		{

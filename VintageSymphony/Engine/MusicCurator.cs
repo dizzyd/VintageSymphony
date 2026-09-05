@@ -13,6 +13,7 @@ public class MusicCurator
 
 	private List<MusicTrack> tracks = new();
 	private readonly Dictionary<Situation, Playlist> playlists = new();
+	private readonly PlaylistSwitchGate switchGate;
 	public IList<SituationAssessment> Assessments => situationAssessor.Assessments;
 	private ILogger Logger => clientApi.Logger;
 
@@ -32,6 +33,7 @@ public class MusicCurator
 		this.situationAssessor = situationAssessor;
 		this.clientApi = clientApi;
 		this.playback = playback;
+		switchGate = new PlaylistSwitchGate(() => clientApi.ElapsedMilliseconds);
 	}
 
 	private void InitializePlaylists()
@@ -71,13 +73,31 @@ public class MusicCurator
 
 	private void AutoSelectPlaylist()
 	{
-		// Check if we need to switch to a better playlist for the current situation
 		var playlist = GetBestPlaylistForCurrentSituation();
-		if (playlist != null && playlist != playback.CurrentPlaylist)
+		if (playlist == null)
+		{
+			return;
+		}
+
+		// The gate decides whether the better playlist has been better for long enough -
+		// see PlaylistSwitchGate for why following the scores directly was a bug. A
+		// playlist from before the pool was rebuilt is nobody's current playlist: its
+		// tracks are gone, so there is nothing to hold on to.
+		var currentPlaylist = playback.CurrentPlaylist;
+		var current = currentPlaylist != null && playlists.ContainsValue(currentPlaylist)
+			? currentPlaylist.Situation
+			: (Situation?)null;
+		var lead = current is { } c ? WeightedScore(playlist.Situation) - WeightedScore(c) : 0f;
+		if (switchGate.Allows(current, playlist.Situation, lead, playback.PlayingSinceMs))
 		{
 			Logger.Debug($"Switching to playlist: {playlist.Situation}");
 			playback.Play(playlist);
 		}
+	}
+
+	private float WeightedScore(Situation situation)
+	{
+		return Assessments.FirstOrDefault(a => a.Situation == situation)?.WeightedScore ?? 0f;
 	}
 
 	private IEnumerable<SituationAssessment> GetHighestAssessments()

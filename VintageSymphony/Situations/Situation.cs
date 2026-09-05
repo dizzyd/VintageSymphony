@@ -2,7 +2,7 @@ namespace VintageSymphony.Situations;
 
 public enum Situation
 {
-	[SituationData(10f)]
+	[SituationData(10f, urgent: true)]
 	TemporalStorm,
 
 	[SituationData(2.0f,
@@ -42,7 +42,8 @@ public enum Situation
 		playContinuous: true,
 		pauseAfterPlayback: true,
 		smoothDecreasingScore: false,
-		smoothIncreasingScore: false)]
+		smoothIncreasingScore: false,
+		urgent: true)]
 	Dead,
 	
 	[SituationData(2.0f,
