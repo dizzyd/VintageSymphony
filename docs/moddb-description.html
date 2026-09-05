@@ -72,12 +72,21 @@ track should play:</p>
   ]
 }</pre>
 
-<p>The situations are <em>calm</em>, <em>idle</em>, <em>adventure</em>, <em>cave</em>,
+<p>The situations are <em>calm</em>, <em>idle</em>, <em>adventure</em>, <em>cave</em>, <em>keep</em>,
 <em>danger</em>, <em>fight</em>, <em>dead</em> and <em>temporalstorm</em>. A track can list as many as
 it likes. <em>title</em> is optional and is what <em>.music info</em> shows.</p>
 
+<p><em>keep</em> is a room you built under the ground &mdash; sealed the way a cellar is,
+below the natural terrain. Inside one the cave music stops, whether or not
+you have keep tracks; with them, they play there and nowhere else. The game
+sizes rooms at fourteen blocks a side, so a hall bigger than that reads as open.</p>
+
 <p>A pack using the game's own <em>musicconfig.json</em> format still works exactly as before, and is
 the way to go if you want the finer controls &mdash; time of day, season, temperature, sunlight.</p>
+
+<p>A mod can ship music the same way: put <em>tracks.json</em> and the files under
+<em>assets/&lt;modid&gt;/music/</em> and anyone who installs the mod has the music, no editing
+needed. The full guide is in <em>docs/adding-music.md</em> in the repository.</p>
 
 <h3>Console commands</h3>
 <ul>

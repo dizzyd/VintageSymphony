@@ -86,12 +86,21 @@ track should play:
   ]
 }
 
-The situations are calm, idle, adventure, cave,
+The situations are calm, idle, adventure, cave, keep,
 danger, fight, dead and temporalstorm. A track can list as many as
 it likes. title is optional and is what .music info shows.
 
+keep is a room you built under the ground - sealed the way a cellar is,
+below the natural terrain. Inside one the cave music stops, whether or not
+you have keep tracks; with them, they play there and nowhere else. The game
+sizes rooms at fourteen blocks a side, so a hall bigger than that reads as open.
+
 A pack using the game's own musicconfig.json format still works exactly as before, and is
 the way to go if you want the finer controls — time of day, season, temperature, sunlight.
+
+A mod can ship music the same way: put tracks.json and the files under
+assets/<modid>/music/ and anyone who installs the mod has the music, no editing
+needed. The full guide is in docs/adding-music.md in the repository.
 
 == Console commands ==
 
