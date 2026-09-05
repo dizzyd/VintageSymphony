@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.MathTools;
 using VintageSymphony.Situations;
 
 namespace VintageSymphony.Engine;
@@ -182,23 +183,46 @@ public class Playback
 			return false;
 		}
 
-		var playerPosition = VintageSymphony.ClientApi.World.Player.Entity.Pos.AsBlockPos;
-		var climateCondition = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(playerPosition);
-		var props = getPlayerProperties();
+		return IsEligible(track, Here());
+	}
 
-		// Wrapped tracks keep the game's own eligibility rules - playlist, structure,
-		// temporal stability, hours - along with the game's cooldowns and hour windows.
-		// The wrapper carries none of those fields, so testing our restrictions against
-		// it passed everything: the village tracks, priority 1.5 and only meant to play
-		// inside a village, won nearly every draw, and the game's ContinuePlay faded each
-		// one out a second in. Custom tracks use our own restrictions and cooldowns.
+	/// <summary>
+	/// Does this playlist hold anything that may play right now? The curator asks this
+	/// before it selects a playlist: a playlist with tracks is not a playlist with music,
+	/// and choosing one whose every track is barred - the game's one Danger track plays
+	/// only inside the Resonance Archive - meant silence for as long as its situation led.
+	/// The sounding and fading tracks count; they are this playlist's music too.
+	/// </summary>
+	public bool HasPlayableTrack(Playlist playlist)
+	{
+		var here = Here();
+		return playlist.Tracks.Any(track => IsEligible(track, here));
+	}
+
+	private (TrackedPlayerProperties props, ClimateCondition climate, BlockPos position) Here()
+	{
+		var position = VintageSymphony.ClientApi.World.Player.Entity.Pos.AsBlockPos;
+		var climate = VintageSymphony.ClientApi.World.BlockAccessor.GetClimateAt(position);
+		return (getPlayerProperties(), climate, position);
+	}
+
+	/// <summary>
+	/// Wrapped tracks keep the game's own eligibility rules - playlist, structure,
+	/// temporal stability, hours - along with the game's cooldowns and hour windows.
+	/// The wrapper carries none of those fields, so testing our restrictions against
+	/// it passed everything: the village tracks, priority 1.5 and only meant to play
+	/// inside a village, won nearly every draw, and the game's ContinuePlay faded each
+	/// one out a second in. Custom tracks use our own restrictions and cooldowns.
+	/// </summary>
+	private bool IsEligible(MusicTrack track, (TrackedPlayerProperties props, ClimateCondition climate, BlockPos position) here)
+	{
 		if (track is MusicTrackWrapper)
 		{
-			return track.ShouldPlay(props, climateCondition, playerPosition);
+			return track.ShouldPlay(here.props, here.climate, here.position);
 		}
 
-		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, props,
-			climateCondition, playerPosition);
+		return trackRestrictionMatcher.IsWithinConfiguredRestrictions(track, here.props,
+			here.climate, here.position);
 	}
 
 	/// <summary>

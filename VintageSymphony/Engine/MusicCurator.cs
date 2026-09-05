@@ -108,34 +108,25 @@ public class MusicCurator
 		return Assessments.FirstOrDefault(a => a.Situation == situation)?.WeightedScore ?? 0f;
 	}
 
-	private IEnumerable<SituationAssessment> GetHighestAssessments()
-	{
-		const float certaintyFuzziness = 0.2f;
-
-		if (Assessments.Count == 0)
-		{
-			return Array.Empty<SituationAssessment>();
-		}
-
-		float highestCertainty = Assessments[0].WeightedScore;
-		float scoreThreshold = highestCertainty - certaintyFuzziness;
-		return Assessments
-			.TakeWhile(s => s.WeightedScore >= scoreThreshold);
-	}
-
 	/// <summary>
-	/// The best-scoring situation that has something to play. Every situation owns a
-	/// playlist, so testing for the playlist's existence - as this used to - made the
-	/// leader win regardless and left the near-tie fallthrough above doing nothing: a
-	/// pack with no fight music sat in silence through every fight. Silence is the one
+	/// The best-ranked situation with music to offer right now.
+	///
+	/// Two things this used to get wrong. It only looked within 0.2 of the top score, and
+	/// when nothing in that band had music it returned nothing - which left the current
+	/// playlist in place, whatever its own situation had fallen to, so a pack with fight
+	/// music and no danger music kept the combat going after the fight was over. And it
+	/// took a playlist with tracks for a playlist with music: the game's one Danger track
+	/// plays only inside the Resonance Archive, so anyone on the game's music alone got
+	/// silence whenever Danger led. Now the ranking is walked all the way down and
+	/// playback is asked whether a playlist has anything it may play. Silence is the one
 	/// situation whose empty playlist is the point.
 	/// </summary>
 	private Playlist? GetBestPlaylistForCurrentSituation()
 	{
-		foreach (var assessment in GetHighestAssessments())
+		foreach (var assessment in Assessments)
 		{
 			if (playlists.TryGetValue(assessment.Situation, out var playlist)
-			    && (playlist.Tracks.Count > 0 || assessment.Situation == Situation.Silence))
+			    && (assessment.Situation == Situation.Silence || playback.HasPlayableTrack(playlist)))
 			{
 				return playlist;
 			}

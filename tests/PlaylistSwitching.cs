@@ -1,7 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
+using Vintagestory.Client.NoObf;
+using VintageSymphony.Situations;
 using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 using VS = VintageSymphony.VintageSymphony;
@@ -121,6 +127,132 @@ namespace VintageSymphony.Tests
             now += 1_000L;
             Assert.False(gate.Allows(Fight, Danger, thinLead, fightStarted), "a fresh lead starts the count over");
         }
+
+        // ---- curator and playback together ------------------------------------
+
+        /// <summary>
+        /// The whole path from ranking to sounding track, on a fake clock and hand-set
+        /// scores, for the case the isolated pieces could not show. A pack with fight
+        /// music and no danger music; a fight is over, the player is indoors, a drifter
+        /// loiters outside. Danger leads at 0.525 but has nothing to play, Idle trails at
+        /// 0.075 with music, Fight has fallen to zero. Selection used to look only within
+        /// 0.2 of the top and come back empty, which left the Fight playlist in place and
+        /// combat music running for as long as the drifter stayed.
+        /// </summary>
+        [VsTest(TimeoutMs = 240000), RequiresClient]
+        public async Task ObsoleteCombatMusicGivesWayWhenTheLeaderHasNoMusic()
+        {
+            await OnClient();
+
+            var wasMusicLevel = ClientSettings.MusicLevel;
+            long now = 1_000_000L;
+
+            var vanilla = VanillaSurfaceTracks().Take(2).ToList();
+            Assert.Equal(2, vanilla.Count, "vanilla tracks to borrow audio from");
+            var fightTrack = OpenedUp(vanilla[0], "fight");
+            var idleTrack = OpenedUp(vanilla[1], "idle");
+
+            var playback = new Engine.Playback(Capi.Logger, new Engine.TrackCooldownManager(() => now),
+                () => VS.ClientMain.playerProperties, () => now);
+            playback.SetMusicFrequency(3);
+
+            var ranked = System.Enum.GetValues<Situations.Situation>()
+                .Select(s => new Situations.Scoring.SituationAssessment(s, 0f)).ToList();
+            void Score(Situations.Situation s, float weighted)
+            {
+                var a = ranked.First(x => x.Situation == s);
+                a.Score = weighted / s.Attributes().Weight;
+                ranked = ranked.OrderByDescending(x => x.WeightedScore).ToList();
+            }
+
+            var curator = new Engine.MusicCurator(Capi, () => ranked, playback, () => now);
+            curator.Tracks = new List<Engine.MusicTrack> { fightTrack, idleTrack };
+
+            try
+            {
+                ClientSettings.MusicLevel = 20;
+
+                // The fight.
+                Score(Fight, 1.0f);
+                curator.Update(1f);
+                playback.Update(1f);
+                Assert.NotNull(playback.CurrentPlaylist, "a playlist during the fight");
+                Assert.Equal(Fight, playback.CurrentPlaylist.Situation, "the playlist during the fight");
+                await Until(() => fightTrack.IsPlaying, 300, "the combat track sounds");
+
+                // Indoors, drifter outside, no danger music in the pack.
+                Score(Fight, 0f);
+                Score(Danger, 0.525f);
+                Score(Idle, 0.075f);
+
+                var switchedAt = -1;
+                for (var second = 1; second <= 45 && switchedAt < 0; second++)
+                {
+                    now += 1_000L;
+                    curator.Update(1f);
+                    playback.Update(1f);
+                    await Ticks(1);
+                    if (playback.CurrentPlaylist?.Situation == Idle)
+                    {
+                        switchedAt = second;
+                    }
+                }
+
+                Log("combat gave way to the Idle playlist after " + switchedAt + "s");
+                Assert.Greater(switchedAt, 0, "the Idle playlist was selected within 45s");
+                Assert.GreaterOrEqual(switchedAt, 30, "not before the combat track's 30s minimum");
+                Assert.LessOrEqual(switchedAt, 32, "and not long after it");
+
+                // The combat track fades over two real seconds and the fade's deadline is
+                // on the fake clock, so from here the clock runs at the speed of the ticks -
+                // a clock that raced ahead would trip the engine's "fade did not finish"
+                // safety net and cut the track instead of letting it fade.
+                for (var i = 0; i < 400 && !(idleTrack.IsPlaying && !fightTrack.IsPlaying); i++)
+                {
+                    now += 50L;
+                    playback.Update(0.05f);
+                    await Ticks(1);
+                }
+
+                Assert.True(idleTrack.IsPlaying, "an Idle track is sounding");
+                Assert.False(fightTrack.IsPlaying, "and the combat track is not");
+            }
+            finally
+            {
+                playback.StopTrack(0f);
+                ClientSettings.MusicLevel = wasMusicLevel;
+            }
+        }
+
+        /// <summary>
+        /// The same audio as a vanilla track, opened up to one situation and nothing else
+        /// that could exclude it. Initialize rebuilds "music/&lt;path&gt;.ogg", so it wants
+        /// the bare name back.
+        /// </summary>
+        static Engine.MusicTrack OpenedUp(SurfaceMusicTrack vanilla, string situation)
+        {
+            var path = vanilla.Location.Path;
+            path = path.Substring("music/".Length, path.Length - "music/".Length - ".ogg".Length);
+
+            var track = new Engine.MusicTrack
+            {
+                Location = new AssetLocation(vanilla.Location.Domain, path),
+                Situation = situation,
+                MinSunlight = 0
+            };
+
+            track.Initialize(Capi.Assets, Capi, VanillaEngine());
+            return track;
+        }
+
+        static SystemMusicEngine VanillaEngine() =>
+            VS.ClientMain.clientSystems.OfType<SystemMusicEngine>().First();
+
+        static IEnumerable<SurfaceMusicTrack> VanillaSurfaceTracks() =>
+            (typeof(SystemMusicEngine)
+                .GetField("shuffledTracks", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(VanillaEngine()) as IMusicTrack[] ?? new IMusicTrack[0])
+            .OfType<SurfaceMusicTrack>();
 
         // ---- the facts --------------------------------------------------------
 
@@ -250,5 +382,6 @@ namespace VintageSymphony.Tests
                 await Ticks(20);
             }
         }
+
     }
 }
