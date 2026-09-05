@@ -92,6 +92,7 @@ public class DebugOverlay : HudElement
 		sb.Append(nameof(facts.SecondsSinceLastAttack)).Append(": ").AppendLine(facts.SecondsSinceLastAttack.ToString());
 		sb.Append(nameof(facts.SunLevel)).Append(": ").AppendLine(facts.SunLevel.ToString("0"));
 		sb.Append(nameof(facts.DayLight)).Append(": ").AppendLine(facts.DayLight.ToString("0.##"));
+		sb.Append(nameof(facts.RoomExitCount)).Append(": ").AppendLine(facts.RoomExitCount.ToString());
 		sb.Append("Temperature: ").AppendLine(climateCondition.Temperature.ToString("0.##"));
 		sb.AppendLine("---");
 		foreach (var assessment in musicEngine.SituationAssessor.Assessments.OrderByDescending(s => s.WeightedScore))

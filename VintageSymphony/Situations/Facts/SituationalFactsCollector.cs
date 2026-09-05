@@ -53,9 +53,11 @@ public class SituationalFactsCollector
 	/// <summary>Past this a visible enemy scores the same as none at all - see DangerEvaluator.</summary>
 	private const float VisibleEnemyRelevantDistance = 25f;
 
-	private const int ResonatorScanIntervalMs = 1000;
-	private readonly long resonatorScanListenerId;
+	private const int SurroundingsScanIntervalMs = 1000;
+	private readonly long surroundingsScanListenerId;
 	private volatile float playingResonatorDistance = float.PositiveInfinity;
+	private volatile int roomExitCount = -1;
+	private readonly RoomRegistry roomRegistry;
 
 	public SituationalFactsCollector(AttributeStorage attributeStorage)
 	{
@@ -67,13 +69,14 @@ public class SituationalFactsCollector
 		worldHeight = clientApi.World.BlockAccessor.MapSize.Y;
 		seaLevel = clientApi.World.SeaLevel;
 		riftModSystem = clientApi.ModLoader.GetModSystem<ModSystemRifts>();
-		resonatorScanListenerId =
-			clientApi.World.RegisterGameTickListener(ScanForPlayingResonators, ResonatorScanIntervalMs);
+		roomRegistry = clientApi.ModLoader.GetModSystem<RoomRegistry>();
+		surroundingsScanListenerId =
+			clientApi.World.RegisterGameTickListener(ScanSurroundings, SurroundingsScanIntervalMs);
 	}
 
 	public void Dispose()
 	{
-		clientApi.World.UnregisterGameTickListener(resonatorScanListenerId);
+		clientApi.World.UnregisterGameTickListener(surroundingsScanListenerId);
 		clientApi.Event.BlockChanged -= OnBlockChanged;
 	}
 
@@ -130,6 +133,7 @@ public class SituationalFactsCollector
 		UpdateSunFacts();
 		UpdateAlive();
 		facts.PlayingResonatorDistance = playingResonatorDistance;
+		facts.RoomExitCount = roomExitCount;
 
 		return facts;
 	}
@@ -424,6 +428,29 @@ public class SituationalFactsCollector
 	}
 
 	/// <summary>
+	/// The readings that want the main thread: block entities and the room registry are
+	/// both its property. Once a second is ample for either.
+	/// </summary>
+	private void ScanSurroundings(float dt)
+	{
+		ScanForPlayingResonators();
+		LookUpRoom();
+	}
+
+	/// <summary>
+	/// The game's own idea of a room, the one that makes a cellar a cellar: a flood
+	/// fill from the player's feet that stops at heat-retaining faces and counts every
+	/// way it gets out. A door is a wall to it. So is the edge of its search, fourteen
+	/// blocks on a side - a hall bigger than that reads as open, which is the honest
+	/// limit of the thing.
+	/// </summary>
+	private void LookUpRoom()
+	{
+		var room = roomRegistry.GetRoomForPosition(PlayerEntity.Pos.AsBlockPos);
+		roomExitCount = room?.ExitCount ?? -1;
+	}
+
+	/// <summary>
 	/// A resonator is a block entity, and the chunks already index those - so ask the
 	/// chunks rather than reading every block in range. Walking the 37^3 blocks the old
 	/// way cost more than everything else this collector does put together, and it cost
@@ -433,7 +460,7 @@ public class SituationalFactsCollector
 	/// tick and leaves the answer for the fact thread to pick up. Once a second is ample
 	/// for "is a resonator playing near me".
 	/// </summary>
-	private void ScanForPlayingResonators(float dt)
+	private void ScanForPlayingResonators()
 	{
 		const int radius = SituationalFacts.PlayingResonatorDistanceMax;
 		const int chunkSize = GlobalConstants.ChunkSize;

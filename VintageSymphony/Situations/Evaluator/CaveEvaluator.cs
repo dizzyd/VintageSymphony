@@ -15,6 +15,9 @@ public class CaveEvaluator : IEvaluator
 		float underground = MoreMath.ClampMap(facts.DistanceToSurface, 0, 10, 0, 1);
 		float sunLevel = MoreMath.ClampMap(facts.SunLevel, 3, 10, 1, 0);
 		float homeProximity = MoreMath.ClampMap(facts.DistanceFromHome, 20, 50, 1, 0);
-		return underground * sunLevel - homeProximity;
+		// Walls all round are the difference between a cave and a cellar, however deep
+		// the cellar. Someone who built the room they stand in is not exploring it.
+		float enclosure = facts.IsInEnclosedRoom ? 1f : 0f;
+		return underground * sunLevel - homeProximity - enclosure;
 	}
 }

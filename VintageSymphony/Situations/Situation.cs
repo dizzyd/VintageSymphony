@@ -26,6 +26,16 @@ public enum Situation
 		smoothDecreasingScore: false)]
 	Cave,
 
+	/// <summary>
+	/// A room the player built below the ground: sealed, and under the natural
+	/// terrain. Weighted to beat Calm's easy 1.0 when it is fully certain, so that a
+	/// pack with keep music gets to play it; a pack without falls through to Calm and
+	/// Idle, which is what the Cave damping already leaves.
+	/// </summary>
+	[SituationData(weight: 1.2f,
+		aversions: new[] { Danger, Dead })]
+	Keep,
+
 	[SituationData(weight: 1.2f,
 		aversions: new[] { Cave, Danger, Dead })]
 	Adventure,

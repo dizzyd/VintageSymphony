@@ -26,4 +26,13 @@ public struct SituationalFacts
 	public float SunLevel;
 	public float DayLight;
 	public bool Alive;
+
+	/// <summary>
+	/// How many ways out the game's room registry found from where the player stands.
+	/// Zero is a sealed room - the same test that makes a cellar a cellar. Unknown until
+	/// the first scan.
+	/// </summary>
+	public int RoomExitCount = -1;
+
+	public bool IsInEnclosedRoom => RoomExitCount == 0;
 }
