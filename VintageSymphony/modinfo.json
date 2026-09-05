@@ -9,7 +9,7 @@
     "DoodleGarbage"
   ],
   "description": "A situation-aware music engine replacement",
-  "version": "1.2.5",
+  "version": "1.3.0",
   "dependencies": {
     "game": "1.22.0"
   },
