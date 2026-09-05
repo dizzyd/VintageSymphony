@@ -46,6 +46,14 @@ every creature nearby. Both were doing far more work than the answer needed.
 
   - Installing or updating a music source takes effect straight away, without restarting.
 
+  - The first time a track plays, chat says what it is and who made it, when the
+pack says. Once per track per session; there is a switch in the config to turn it off.
+
+  - A sealed room under the ground is not a cave. Cave music stops in one, and a new
+keep situation lets a pack give underground bases music of their own.
+
+  - A mod can ship music for this engine, and it is found on install with nothing to edit.
+
 == Getting the music ==
 
 Install the mod, load a world, and open the config with .music config. Press
@@ -88,7 +96,8 @@ track should play:
 
 The situations are calm, idle, adventure, cave, keep,
 danger, fight, dead and temporalstorm. A track can list as many as
-it likes. title is optional and is what .music info shows.
+it likes. title is optional and is what .music info shows; artist is who made it,
+and goes into the chat line when the track first plays.
 
 keep is a room you built under the ground - sealed the way a cellar is,
 below the natural terrain. Inside one the cave music stops, whether or not

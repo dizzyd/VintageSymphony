@@ -35,6 +35,14 @@ milliseconds where it wanted seconds, so it never had any effect.</li>
 in a 37-block cube several times a second looking for a resonator, and it traced a line of sight to
 every creature nearby. Both were doing far more work than the answer needed.</li>
 <li>Installing or updating a music source takes effect straight away, without restarting.</li>
+
+  <li>The first time a track plays, chat says what it is and who made it, when the
+pack says. Once per track per session; there is a switch in the config to turn it off.</li>
+
+  <li>A sealed room under the ground is not a cave. Cave music stops in one, and a new
+<em>keep</em> situation lets a pack give underground bases music of their own.</li>
+
+  <li>A mod can ship music for this engine, and it is found on install with nothing to edit.</li>
 </ul>
 
 <h3>Getting the music</h3>
@@ -74,7 +82,8 @@ track should play:</p>
 
 <p>The situations are <em>calm</em>, <em>idle</em>, <em>adventure</em>, <em>cave</em>, <em>keep</em>,
 <em>danger</em>, <em>fight</em>, <em>dead</em> and <em>temporalstorm</em>. A track can list as many as
-it likes. <em>title</em> is optional and is what <em>.music info</em> shows.</p>
+it likes. <em>title</em> is optional and is what <em>.music info</em> shows; <em>artist</em> is who
+made it, and goes into the chat line when the track first plays.</p>
 
 <p><em>keep</em> is a room you built under the ground &mdash; sealed the way a cellar is,
 below the natural terrain. Inside one the cave music stops, whether or not

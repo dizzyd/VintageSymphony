@@ -17,4 +17,10 @@ public class Configuration
     /// honoured. On, the split is kept.
     /// </summary>
     public bool HonourGamePlaylists = false;
+
+    /// <summary>
+    /// Say in chat what has started playing, with the artist when the pack names one.
+    /// Once per track per game session, so it credits rather than nags.
+    /// </summary>
+    public bool AnnounceTracks = true;
 }

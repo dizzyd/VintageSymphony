@@ -284,6 +284,7 @@ public class LocalMusicLoader
 		};
 
 		track.Title = entry.Title ?? Path.GetFileNameWithoutExtension(entry.File);
+		track.Artist = entry.Artist;
 
 		if (entry.Priority.HasValue)
 		{

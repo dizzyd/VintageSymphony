@@ -148,7 +148,7 @@ Open `tracks.json` and change the tags:
 ```json
 {
   "tracks": [
-    { "file": "hearth.ogg", "situations": ["calm", "idle", "keep"], "title": "By the Hearth" },
+    { "file": "hearth.ogg", "situations": ["calm", "idle", "keep"], "title": "By the Hearth", "artist": "Someone Kind" },
     { "file": "war-drums.ogg", "situations": ["fight"], "title": "War Drums", "priority": 1.5 }
   ]
 }
@@ -160,7 +160,8 @@ Each track can have:
 |---|---|---|
 | `file` | yes | The file name as it sits in the `music` folder, extension included. |
 | `situations` | yes | One or more of the names in the next section. |
-| `title` | no | What `.music info` shows. Defaults to the file name. |
+| `title` | no | What `.music info` and the chat announcement show. Defaults to the file name. |
+| `artist` | no | Who made it. The first time a track plays in a session, chat says `Now playing By the Hearth (Someone Kind)`. Without it, just the title. |
 | `priority` | no | Higher wins when several tracks fit the moment. `1` is normal; `2` is "nearly always pick this one"; `0.5` is "only sometimes". |
 | `volume` | no | `0` to `1`, on top of the global volume slider. Use it to quieten a track that was mastered loud. |
 
@@ -170,6 +171,10 @@ log and ignored, and a track whose file is missing is skipped with a message
 saying which.
 
 ### 6. Check it is working
+
+The first time each track plays, chat says `Now playing ...` with the title and
+artist you gave it, so a listener can find out who to thank. It says it once per
+track per session; the switch to turn it off is in `.music config`.
 
 In chat, `.music info` shows what is playing and which source it came from.
 `.music next` skips to another track. `.music debug` puts up an overlay with the
@@ -304,6 +309,7 @@ only in winter, only in the cold, or only far from spawn, use the game's own
       "$type": "VintageSymphony.Engine.MusicTrack, VintageSymphony",
       "file": "midwinter-night",
       "title": "Midwinter Night",
+      "artist": "Someone Kind",
       "situation": "calm|idle",
       "minHour": 20,
       "maxHour": 5,
@@ -324,6 +330,9 @@ Differences from `tracks.json`:
 - Situations go in one string, separated by `|`.
 - **Set `"minSunlight": 0`** unless you mean a track for daylight only. The
   game's default is 5, which quietly stops a track playing at night or underground.
+- A title ending in brackets, like `"Run Faster (David Fesliyan)"`, is read as
+  the title and the artist when no `artist` is given. That is how the mod's own
+  pack carries its credits.
 
 The knobs, all optional:
 
@@ -339,7 +348,7 @@ The knobs, all optional:
 | `minSunlight`, `maxSunlight` | 0 to 32 | Sunlight reaching you, after roofs and depth. |
 | `minDaylight`, `maxDaylight` | 0 to 2 | Brightness of the sky itself: night is near 0, noon near 1. |
 | `distanceToSpawnPoint` | blocks | Only play at least this far from the world spawn. |
-| `priority`, `volume` | | As in `tracks.json`. |
+| `title`, `artist`, `priority`, `volume` | | As in `tracks.json`. |
 | `disableCooldown` | true/false | Let this track repeat without waiting its turn. |
 
 ## When something is not working

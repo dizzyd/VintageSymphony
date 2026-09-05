@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -20,6 +21,10 @@ public class MusicTrack : SurfaceMusicTrack
 #pragma warning disable CS0649
 	private string? trackTitle;
 #pragma warning restore CS0649
+
+	/// <summary>Who made it, if the pack says. Shown when the track is announced.</summary>
+	[JsonProperty(propertyName: "artist")]
+	public string? Artist { get; set; }
 
 	/// <summary>
 	/// What /music info shows. Settable so tracks built from a tracks.json manifest can
@@ -83,6 +88,31 @@ public class MusicTrack : SurfaceMusicTrack
 	{
 		TrackSituations = ParseTrackSituations(Situation);
 		StartPriorityRnd = NatFloat.createGauss(1f, 0.3f);
+		CreditFromTitle();
+	}
+
+	/// <summary>
+	/// The game's format has nowhere to put an artist, so the pack this mod ships wrote
+	/// them into the titles: "Run Faster (David Fesliyan)". Read that back when nothing
+	/// says otherwise, so the credit lands where it belongs and the title is just the
+	/// title. This runs on initialisation, which is before a tracks.json sets its own
+	/// title and artist - so a hand-written title keeps its brackets.
+	/// </summary>
+	private void CreditFromTitle()
+	{
+		if (!string.IsNullOrWhiteSpace(Artist) || trackTitle == null)
+		{
+			return;
+		}
+
+		var match = Regex.Match(trackTitle, @"^(.*\S)\s*\(([^()]+)\)$");
+		if (!match.Success)
+		{
+			return;
+		}
+
+		trackTitle = match.Groups[1].Value;
+		Artist = match.Groups[2].Value.Trim();
 	}
 
 	protected static Situation[] ParseTrackSituations(string situationString)

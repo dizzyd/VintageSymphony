@@ -32,8 +32,10 @@ public class MusicEngine : BaseModSystem
 	private ILogger Logger => clientApi!.Logger;
 	private MusicCurator musicCurator = null!;
 	private Playback playback = null!;
+	private TrackAnnouncer announcer = null!;
 
 	public Playback Playback => playback;
+	public TrackAnnouncer Announcer => announcer;
 	public MusicTrack? CurrentMusicTrack => playback?.CurrentTrack;
 
 	public override void StartClientSide(ICoreClientAPI api)
@@ -50,11 +52,16 @@ public class MusicEngine : BaseModSystem
 		situationAssessor = new SituationAssessor(VintageSymphony.Instance.AttributeStorage);
 		trackCooldownManager = new TrackCooldownManager(() => clientApi!.ElapsedMilliseconds);
 		
+		announcer = new TrackAnnouncer(
+			text => clientApi!.ShowChatMessage(text),
+			() => VintageSymphony.Configuration.AnnounceTracks);
+
 		playback = new Playback(
 			Logger,
 			trackCooldownManager,
 			() => PlayerProperties,
-			() => clientApi!.ElapsedMilliseconds);
+			() => clientApi!.ElapsedMilliseconds,
+			announcer.TrackStarted);
 
 		musicCurator = new MusicCurator(
 			clientApi!,

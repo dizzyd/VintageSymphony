@@ -73,6 +73,7 @@ public class Playback
 
 	/// <summary>The track that played last, kept so the next one need not be it again.</summary>
 	private MusicTrack? lastPlayedTrack;
+	private readonly Action<MusicTrack>? onTrackStarted;
 
 	private long currentTrackStartedMs;
 
@@ -82,16 +83,19 @@ public class Playback
 	/// </summary>
 	public long? PlayingSinceMs => IsPlayingTrack() ? currentTrackStartedMs : null;
 
+	/// <param name="onTrackStarted">Told each time a track begins; the announcer listens.</param>
 	public Playback(
 		ILogger logger,
 		TrackCooldownManager trackCooldownManager,
 		Func<TrackedPlayerProperties> getPlayerProperties,
-		Func<long> getCurrentTimeMs)
+		Func<long> getCurrentTimeMs,
+		Action<MusicTrack>? onTrackStarted = null)
 	{
 		this.logger = logger;
 		this.trackCooldownManager = trackCooldownManager;
 		this.getPlayerProperties = getPlayerProperties;
 		this.getCurrentTimeMs = getCurrentTimeMs;
+		this.onTrackStarted = onTrackStarted;
 		this.trackRestrictionMatcher = new TrackRestrictionMatcher(VintageSymphony.ClientApi.World.Calendar);
 
 		Pause = new Pause(getCurrentTimeMs);
@@ -293,6 +297,7 @@ public class Playback
 		}
 
 		logger.Notification($"Playing track: {track.Name}");
+		onTrackStarted?.Invoke(track);
 	}
 
 	public void StopTrack(float fadeOutTimeS = 2f)

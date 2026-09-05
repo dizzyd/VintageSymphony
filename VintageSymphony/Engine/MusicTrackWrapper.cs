@@ -21,6 +21,7 @@ public sealed class MusicTrackWrapper : MusicTrack
 			Situation = SituationLibrary.GetSituationString(wrappedTrack);
 			Priority = wrappedSurfaceTrack.Priority;
 			StartPriority = wrappedSurfaceTrack.StartPriority;
+			Title = TitleFrom(Location);
 		}
 
 		if (wrappedTrack is CaveMusicTrack)
@@ -36,6 +37,29 @@ public sealed class MusicTrackWrapper : MusicTrack
 	}
 
 	public override bool IsPlaying => wrappedTrack.IsActive;
+
+	/// <summary>
+	/// The game's musicconfig names its tracks, but the parser drops the name on the
+	/// floor - so the file name is all there is, and "nadiya-spring" reads better as
+	/// "Nadiya Spring" when it is announced.
+	/// </summary>
+	private static string TitleFrom(AssetLocation location)
+	{
+		var name = location.Path;
+		if (name.StartsWith("music/"))
+		{
+			name = name.Substring("music/".Length);
+		}
+
+		if (name.EndsWith(".ogg"))
+		{
+			name = name.Substring(0, name.Length - ".ogg".Length);
+		}
+
+		var words = name.Split(new[] { '-', '_' }, StringSplitOptions.RemoveEmptyEntries)
+			.Select(w => char.ToUpperInvariant(w[0]) + w.Substring(1));
+		return string.Join(' ', words);
+	}
 
 	/// <summary>
 	/// BeginSort rolls the wrapped track's StartPriority, and selection reads it off this

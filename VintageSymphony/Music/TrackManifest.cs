@@ -28,6 +28,9 @@ public class TrackEntry
 	/// <summary>Shown by /music info. Defaults to the file name.</summary>
 	[JsonProperty("title")] public string? Title { get; set; }
 
+	/// <summary>Who made it. Shown alongside the title when the track is announced.</summary>
+	[JsonProperty("artist")] public string? Artist { get; set; }
+
 	/// <summary>Higher wins when several tracks fit. Defaults to 1.</summary>
 	[JsonProperty("priority")] public float? Priority { get; set; }
 
