@@ -162,7 +162,7 @@ Each track can have:
 | `situations` | yes | One or more of the names in the next section. |
 | `title` | no | What `.music info` and the chat announcement show. Defaults to the file name. |
 | `artist` | no | Who made it. The first time a track plays in a session, chat says `Now playing By the Hearth (Someone Kind)`. Without it, just the title. |
-| `priority` | no | Higher wins when several tracks fit the moment. `1` is normal; `2` is "nearly always pick this one"; `0.5` is "only sometimes". |
+| `priority` | no | Higher wins when several tracks fit the moment. `1` is normal; `1.5` and up is "nearly always pick this one when it's due"; `0.5` is "half as often". |
 | `volume` | no | `0` to `1`, on top of the global volume slider. Use it to quieten a track that was mastered loud. |
 
 The mod reads `tracks.json` when a world loads, so after editing, leave to the
@@ -217,11 +217,24 @@ A few things worth knowing:
 
 ## How a track gets chosen
 
-When a situation wins, the mod gathers every track tagged for it, sets aside the
-ones that have played recently, and draws one. The draw is weighted by
-`priority` with some randomness on top, so a `1.5` track plays more often than a
-`1` but does not drown it out. If none of the winning situation's tracks may play
-right now, the mod moves down to the next best situation rather than going quiet.
+When a situation wins, the mod gathers every track tagged for it that may play
+right now, and draws one from the half of them that has gone longest unheard. A
+track therefore cannot come back until about half of what fits has played since,
+however big or small your pack is. A track tagged in two versions (a whole piece
+and its `_stems` version) counts as one piece, so you will not hear both back to
+back, and a track by the artist you just heard is less likely to be picked when
+someone else's is on offer.
+
+The draw is weighted by `priority`. Above `1` it is steep: `1.05` about doubles a
+track's chances, `1.1` makes it about five times as likely, and `1.5` or more
+nearly always wins when it is among the longest unheard. Below `1` it is plain:
+`0.5` is half as likely. Once a favoured track has played it goes to the back
+like any other, so priority decides the order, not how often a track repeats.
+
+`idle`, `adventure` and `keep` are peaceful, and often thinly stocked. When fewer
+than eight of their tracks fit the moment, the `calm` tracks that fit join the
+draw. If none of the winning situation's tracks may play right now, the mod moves
+down to the next best situation rather than going quiet.
 
 ## Sharing a pack with other people
 
@@ -349,7 +362,7 @@ The knobs, all optional:
 | `minDaylight`, `maxDaylight` | 0 to 2 | Brightness of the sky itself: night is near 0, noon near 1. |
 | `distanceToSpawnPoint` | blocks | Only play at least this far from the world spawn. |
 | `title`, `artist`, `priority`, `volume` | | As in `tracks.json`. |
-| `disableCooldown` | true/false | Let this track repeat without waiting its turn. |
+| `disableCooldown` | true/false | Let this track repeat without waiting its turn: it is always among the longest unheard. |
 
 ## When something is not working
 

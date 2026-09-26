@@ -220,6 +220,13 @@ public class MusicEngine : BaseModSystem
 			.ToList();
 
 		tracks.AddRange(local);
+
+		var corrected = DefaultPackCorrections.Apply(tracks);
+		if (corrected > 0)
+		{
+			Logger.Notification("Corrected the situations of {0} tracks from the default music pack", corrected);
+		}
+
 		musicCurator.Tracks = tracks;
 
 		LogPoolComposition(fromGame, local, allTracks.Length);

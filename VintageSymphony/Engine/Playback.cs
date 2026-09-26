@@ -42,6 +42,14 @@ public class Playback
 	private const long MinimumTrackCooldownMs = 8L * 60L * 1000L;
 
 	/// <summary>
+	/// Below this many tracks that fit, a playlist that borrows takes its lender's too.
+	/// Eight is about what a thirty-minute cooldown gets through at the middle frequency.
+	/// </summary>
+	private const int ThinPlaylist = 8;
+
+	private readonly ListeningHistory listeningHistory = new();
+
+	/// <summary>
 	/// The shortest silence <see cref="Stop"/> will hold. Same reason: at the highest music
 	/// frequency the ordinary between-track pause is zero, and a stop that borrowed it was
 	/// followed by a new track on the very next tick.
@@ -159,7 +167,8 @@ public class Playback
 
 	/// <summary>
 	/// The draw, and the shape of it - the counts go to the history log, where a repeat
-	/// has to be explicable.
+	/// has to be explicable. <see cref="TrackSelector.Draw"/> is the bag itself; this is
+	/// what goes into it.
 	/// </summary>
 	private TrackStart? FindNextTrack()
 	{
@@ -167,31 +176,35 @@ public class Playback
 			return null;
 
 		var fit = CurrentPlaylist.GetTracks(TrackFilterPredicate).ToList();
-		var fresh = fit.Where(track => !trackCooldownManager.IsOnCooldown(track)).ToList();
 
-		var how = TrackStart.Tier.Fresh;
-		var track = TrackSelector.Select(fresh);
-
-		// Everything that fits has played recently. Going round again beats sitting in
-		// silence, but not straight back into the track that just finished - a skip that
-		// plays the same song again reads as a broken skip. The game's own engine refuses
-		// its LastPlayedTrack for the same reason.
-		if (track == null)
+		var borrowed = 0;
+		if (fit.Count < ThinPlaylist && CurrentPlaylist.Borrows is { } lender)
 		{
-			how = TrackStart.Tier.Recycled;
-			track = TrackSelector.Select(fit.Where(t => t != lastPlayedTrack));
+			var extra = lender.GetTracks(TrackFilterPredicate).Where(t => !fit.Contains(t)).ToList();
+			borrowed = extra.Count;
+			fit.AddRange(extra);
 		}
 
-		// Unless it really is the only thing that fits.
+		var offCooldown = fit.Count(track => !trackCooldownManager.IsOnCooldown(track));
+		// A track that opts out of its cooldown opts out of the bag too: never heard, as
+		// far as the draw is concerned.
+		var track = TrackSelector.Draw(fit,
+			t => t.DisableCooldown ? null : listeningHistory.LastHeard(t),
+			trackCooldownManager.IsOnCooldown,
+			lastPlayedTrack);
 		if (track == null)
 		{
-			how = TrackStart.Tier.OnlyFit;
-			track = TrackSelector.Select(fit);
+			return null;
 		}
 
-		return track == null
-			? null
-			: new TrackStart(track, CurrentPlaylist.Situation, CurrentPlaylist.Tracks.Count, fit.Count, fresh.Count, how);
+		// The draw only reaches a track inside its cooldown when nothing that fits is
+		// outside one; the tiers say which of those happened, for the log.
+		var how = fit.Count == 1 ? TrackStart.Tier.OnlyFit
+			: offCooldown == 0 ? TrackStart.Tier.Recycled
+			: TrackStart.Tier.Fresh;
+
+		return new TrackStart(track, CurrentPlaylist.Situation, CurrentPlaylist.Tracks.Count, fit.Count, offCooldown,
+			how, borrowed);
 	}
 
 	private bool TrackFilterPredicate(MusicTrack track)
@@ -309,6 +322,7 @@ public class Playback
 		lastPlayedTrack = track;
 		CurrentTrack = track;
 		currentTrackStartedMs = getCurrentTimeMs();
+		listeningHistory.Heard(track, currentTrackStartedMs);
 		CurrentTrack.BeginPlay(getPlayerProperties());
 		if (!track.DisableCooldown)
 		{

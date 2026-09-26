@@ -77,7 +77,9 @@ public class TrackHistoryLog
 
 		return $"{Stamp(at)}  {start.Situation,-13} {start.Track.Title}  [{KeyOf(start.Track)}]"
 		       + $"  play #{plays} this sitting"
-		       + $"  fit {start.Fit} of {start.InPlaylist}, {start.OffCooldown} off cooldown{how}";
+		       + $"  fit {start.Fit - start.Borrowed} of {start.InPlaylist}"
+		       + (start.Borrowed > 0 ? $" + {start.Borrowed} borrowed" : "")
+		       + $", {start.OffCooldown} off cooldown{how}";
 	}
 
 	private static string Stamp(DateTime at) => at.ToString("yyyy-MM-dd HH:mm:ss");

@@ -115,6 +115,13 @@ public class MusicTrack : SurfaceMusicTrack
 		Artist = match.Groups[2].Value.Trim();
 	}
 
+	/// <summary>Re-tag a track after it was read, as <see cref="DefaultPackCorrections"/> does.</summary>
+	public void SetSituation(string situation)
+	{
+		Situation = situation;
+		TrackSituations = ParseTrackSituations(situation);
+	}
+
 	protected static Situation[] ParseTrackSituations(string situationString)
 	{
 		return situationString

@@ -68,8 +68,8 @@ namespace VintageSymphony.Tests
         }
 
         /// <summary>
-        /// The other half of it: priority is a nudge, but a real one. A track lifted well
-        /// clear of the roll - which is a gauss around 1 - still wins.
+        /// The other half of it: priority is a nudge, but a real one. The draw weighs a
+        /// track by its priority to the sixteenth, so one at 3 still wins outright.
         /// </summary>
         [VsTest, RequiresClient]
         public async Task AStronglyPreferredTrackStillWins()
@@ -98,12 +98,11 @@ namespace VintageSymphony.Tests
         }
 
         /// <summary>
-        /// BeginSort rolls the wrapped track's start priority; selection reads it off the
-        /// wrapper. Without the copy back the wrapper sorts on whatever the value was when
-        /// it was built, which for the game's own music is never updated at all.
+        /// The game's music is weighed by the game's own priority: the wrapper carries it
+        /// across, so a village track at 1.5 is favoured here as it is in the game.
         /// </summary>
         [VsTest, RequiresClient]
-        public async Task WrappedTracksCarryTheirStartPriorityRoll()
+        public async Task WrappedTracksAreWeighedByTheGamesPriority()
         {
             await OnClient();
 
@@ -111,15 +110,9 @@ namespace VintageSymphony.Tests
             Assert.NotNull(wrapped, "a vanilla surface track to wrap");
 
             var wrapper = new Engine.MusicTrackWrapper(wrapped);
-            for (var i = 0; i < 10; i++)
-            {
-                wrapper.BeginSort();
-                Assert.Equal(wrapped.StartPriority, wrapper.StartPriority,
-                    "the wrapper carries the roll BeginSort just made");
-            }
-
-            Assert.GreaterOrEqual(Engine.TrackSelector.SelectionPriority(wrapper), wrapper.StartPriority,
-                "and selection sees it");
+            Assert.Equal(wrapped.Priority, wrapper.Priority, "the wrapper carries the game's priority");
+            Assert.Equal(System.Math.Pow(wrapped.Priority, 16), Engine.TrackSelector.Weight(wrapper),
+                "and the draw weighs it by that");
         }
 
         // ---- cooldown ---------------------------------------------------------
@@ -386,8 +379,8 @@ namespace VintageSymphony.Tests
         }
 
         /// <summary>
-        /// A track the selector will accept: Initialize is what seeds the roll BeginSort
-        /// makes, so a track that skipped it would sort on a constant and prove nothing.
+        /// A track initialised the way the game initialises one, so the draw sees what it
+        /// would see in play.
         /// </summary>
         static Engine.MusicTrack Track(string name, float priority)
         {

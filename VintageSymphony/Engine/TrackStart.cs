@@ -10,13 +10,15 @@ namespace VintageSymphony.Engine;
 /// <param name="InPlaylist">Tracks in the playlist drawn from.</param>
 /// <param name="Fit">Of those, the ones whose rules allowed them right now.</param>
 /// <param name="OffCooldown">Of those, the ones that had not played recently.</param>
+/// <param name="Borrowed">Of the ones that fit, how many came from the playlist this one borrows from.</param>
 public sealed record TrackStart(
 	MusicTrack Track,
 	Situation Situation,
 	int InPlaylist,
 	int Fit,
 	int OffCooldown,
-	TrackStart.Tier How)
+	TrackStart.Tier How,
+	int Borrowed = 0)
 {
 	public enum Tier
 	{

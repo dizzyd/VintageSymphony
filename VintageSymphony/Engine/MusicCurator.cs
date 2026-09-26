@@ -72,6 +72,11 @@ public class MusicCurator
 				(situationTracks.Count > 0) ? situationTracks : Enumerable.Empty<MusicTrack>());
 			playlists[situation] = playlist;
 		}
+
+		foreach (var situation in new[] { Situation.Idle, Situation.Adventure, Situation.Keep })
+		{
+			playlists[situation].Borrows = playlists[Situation.Calm];
+		}
 	}
 
 	public void Update(float dt)
