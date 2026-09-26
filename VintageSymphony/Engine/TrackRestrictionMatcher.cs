@@ -19,7 +19,7 @@ public class TrackRestrictionMatcher
         return IsHourInRange(calendar.HourOfDay, musicTrack.MinHour, musicTrack.MaxHour)
                && IsBetween((float)Math.Abs(calendar.OnGetLatitude(pos.Z)), musicTrack.MinLatitude,
                    musicTrack.MaxLatitude)
-               && IsBetween(calendar.GetSeasonRel(pos), musicTrack.MinSeason, musicTrack.MaxSeason)
+               && IsSeasonInRange(calendar.GetSeasonRel(pos), musicTrack.MinSeason, musicTrack.MaxSeason)
                && IsBetween(conds.Temperature, musicTrack.MinTemperature, musicTrack.MaxTemperature)
                && IsBetween(conds.WorldGenTemperature, musicTrack.MinWorldGenTemperature, musicTrack.MaxWorldGenTemperature)
                && conds.Rainfall >= musicTrack.MinRainFall
@@ -35,6 +35,22 @@ public class TrackRestrictionMatcher
         return value >= min && value <= max;
     }
 	
+    /// <summary>
+    /// Seasons wrap at the turn of the year the way hours wrap at midnight, so a winter
+    /// track is written 0.85 to 0.25. A plain between test can never pass for that - no
+    /// season is both above 0.85 and below 0.25 - and the pack's seven winter tracks
+    /// never played at all. The game's own check has the same flaw; this is ours.
+    /// </summary>
+    public static bool IsSeasonInRange(float season, float minSeason, float maxSeason)
+    {
+        if (minSeason <= maxSeason)
+        {
+            return season >= minSeason && season <= maxSeason;
+        }
+
+        return season >= minSeason || season <= maxSeason;
+    }
+
     private bool IsHourInRange(float hourOfDay, float minHour, float maxHour)
     {
         if (minHour <= maxHour)

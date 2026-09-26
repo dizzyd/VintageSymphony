@@ -339,7 +339,7 @@ The knobs, all optional:
 | field | range | meaning |
 |---|---|---|
 | `minHour`, `maxHour` | 0 to 24 | Time of day. A range that crosses midnight, like 20 to 5, works. |
-| `minSeason`, `maxSeason` | 0 to 1 | The year as a fraction. The game's own tracks use spring 0.22 to 0.47, summer 0.47 to 0.73, autumn 0.73 to 0.97, and winter from 0.97 round to 0.22. |
+| `minSeason`, `maxSeason` | 0 to 1 | The year as a fraction. The game's own tracks use spring 0.22 to 0.47, summer 0.47 to 0.73, autumn 0.73 to 0.97, and winter from 0.97 round to 0.22. A window that runs over the new year is written the same way: `minSeason` 0.97, `maxSeason` 0.22. |
 | `minTemperature`, `maxTemperature` | °C | The temperature where you stand, right now. |
 | `minWorldGenTemperature`, `maxWorldGenTemperature` | °C | The climate the area was generated with, ignoring season and time of day. |
 | `minRainFall` | 0 to 1 | How much it is raining right now. |
