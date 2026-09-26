@@ -33,7 +33,8 @@ public class ConfigurationDialog : GuiDialog
 	private const string NextKey = "vscfg_next";
 	public const string PlaylistsSwitchKey = "vscfg_playlists";
 	public const string AnnounceSwitchKey = "vscfg_announce";
-	private const int SettingsRows = 2;
+	public const string HistorySwitchKey = "vscfg_history";
+	private const int SettingsRows = 3;
 
 	private readonly Configuration configuration;
 	private readonly ConfigurationLoader configurationLoader;
@@ -46,6 +47,7 @@ public class ConfigurationDialog : GuiDialog
 	/// <summary>Drafted like the source switches: read when the dialog closes.</summary>
 	private bool draftHonourPlaylists;
 	private bool draftAnnounceTracks;
+	private bool draftLogTrackHistory;
 
 	/// <summary>Status text per source, so a download can report itself where it belongs.</summary>
 	private readonly Dictionary<string, string> statusText = new();
@@ -165,13 +167,14 @@ public class ConfigurationDialog : GuiDialog
 
 		SingleComposer.GetSwitch(PlaylistsSwitchKey).On = draftHonourPlaylists;
 		SingleComposer.GetSwitch(AnnounceSwitchKey).On = draftAnnounceTracks;
+		SingleComposer.GetSwitch(HistorySwitchKey).On = draftLogTrackHistory;
 	}
 
 	/// <summary>
 	/// Settings that are not a source, above the sources: whether the game's own music
-	/// keeps to the survival/creative split the game gives it, and whether a track is
-	/// announced in chat when it starts. Same shape as a source row; <see cref="SettingsRows"/>
-	/// is how many there are.
+	/// keeps to the survival/creative split the game gives it, whether a track is
+	/// announced in chat when it starts, and whether every start is written to the history
+	/// log. Same shape as a source row; <see cref="SettingsRows"/> is how many there are.
 	/// </summary>
 	private void AddSettingsRows(int y)
 	{
@@ -190,6 +193,14 @@ public class ConfigurationDialog : GuiDialog
 			.AddSwitch(state => draftAnnounceTracks = state,
 				ElementBounds.Fixed(Margin, y + 6, 10, 30), AnnounceSwitchKey)
 			.AddStaticText("Say what is playing in chat, the first time each track plays",
+				CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
+				ElementBounds.Fixed(46, y + 10, textWidth, 24));
+
+		y += RowHeight;
+		SingleComposer
+			.AddSwitch(state => draftLogTrackHistory = state,
+				ElementBounds.Fixed(Margin, y + 6, 10, 30), HistorySwitchKey)
+			.AddStaticText("Write every track played to track-history.log, next to sources.json",
 				CairoFont.WhiteSmallText(), EnumTextOrientation.Left,
 				ElementBounds.Fixed(46, y + 10, textWidth, 24));
 	}
@@ -403,6 +414,7 @@ public class ConfigurationDialog : GuiDialog
 		pendingRemoveId = null;
 		draftHonourPlaylists = configuration.HonourGamePlaylists;
 		draftAnnounceTracks = configuration.AnnounceTracks;
+		draftLogTrackHistory = configuration.LogTrackHistory;
 		draftSourceEnabled.Clear();
 		foreach (var source in sources.Sources)
 		{
@@ -425,10 +437,12 @@ public class ConfigurationDialog : GuiDialog
 		// Read at the next selection and the next track start, so the pool need not be
 		// rebuilt for either.
 		if (draftHonourPlaylists != configuration.HonourGamePlaylists
-		    || draftAnnounceTracks != configuration.AnnounceTracks)
+		    || draftAnnounceTracks != configuration.AnnounceTracks
+		    || draftLogTrackHistory != configuration.LogTrackHistory)
 		{
 			configuration.HonourGamePlaylists = draftHonourPlaylists;
 			configuration.AnnounceTracks = draftAnnounceTracks;
+			configuration.LogTrackHistory = draftLogTrackHistory;
 			configurationLoader.SaveConfiguration(configuration);
 		}
 

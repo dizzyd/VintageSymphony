@@ -33,9 +33,13 @@ public class MusicEngine : BaseModSystem
 	private MusicCurator musicCurator = null!;
 	private Playback playback = null!;
 	private TrackAnnouncer announcer = null!;
+	private TrackHistoryLog history = null!;
 
 	public Playback Playback => playback;
 	public TrackAnnouncer Announcer => announcer;
+
+	/// <summary>Where the track history goes when the player asks for it.</summary>
+	public string TrackHistoryPath => history.Path;
 	public MusicTrack? CurrentMusicTrack => playback?.CurrentTrack;
 
 	public override void StartClientSide(ICoreClientAPI api)
@@ -56,12 +60,23 @@ public class MusicEngine : BaseModSystem
 			text => clientApi!.ShowChatMessage(text),
 			() => VintageSymphony.Configuration.AnnounceTracks);
 
+		// Beside sources.json rather than under the world: the same songs come round
+		// whichever world it is, and one file is one thing to send.
+		history = new TrackHistoryLog(
+			Path.Combine(clientApi!.DataBasePath, "ModData", VintageSymphony.Instance.Mod.Info.ModID, "track-history.log"),
+			() => VintageSymphony.Configuration.LogTrackHistory,
+			Logger);
+
 		playback = new Playback(
 			Logger,
 			trackCooldownManager,
 			() => PlayerProperties,
 			() => clientApi!.ElapsedMilliseconds,
-			announcer.TrackStarted);
+			start =>
+			{
+				announcer.TrackStarted(start.Track);
+				history.Record(start);
+			});
 
 		musicCurator = new MusicCurator(
 			clientApi!,
@@ -245,6 +260,9 @@ public class MusicEngine : BaseModSystem
 
 		Logger.Notification("Loaded {0} music tracks ({1} offered by the game): {2}",
 			musicCurator.Tracks.Count, available, string.Join(", ", parts));
+		history.Note($"world joined; {musicCurator.Tracks.Count} tracks in the pool ({string.Join(", ", parts)});"
+		             + $" track cooldown {trackCooldownManager.CooldownDuration / 60000} min"
+		             + $" at music frequency {ClientSettings.MusicFrequency}");
 	}
 
 	private bool TracksLoaded()

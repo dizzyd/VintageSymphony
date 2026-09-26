@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -73,7 +72,7 @@ public class Playback
 
 	/// <summary>The track that played last, kept so the next one need not be it again.</summary>
 	private MusicTrack? lastPlayedTrack;
-	private readonly Action<MusicTrack>? onTrackStarted;
+	private readonly Action<TrackStart>? onTrackStarted;
 
 	private long currentTrackStartedMs;
 
@@ -83,13 +82,13 @@ public class Playback
 	/// </summary>
 	public long? PlayingSinceMs => IsPlayingTrack() ? currentTrackStartedMs : null;
 
-	/// <param name="onTrackStarted">Told each time a track begins; the announcer listens.</param>
+	/// <param name="onTrackStarted">Told each time a track begins, and how it was chosen; the announcer and the history log listen.</param>
 	public Playback(
 		ILogger logger,
 		TrackCooldownManager trackCooldownManager,
 		Func<TrackedPlayerProperties> getPlayerProperties,
 		Func<long> getCurrentTimeMs,
-		Action<MusicTrack>? onTrackStarted = null)
+		Action<TrackStart>? onTrackStarted = null)
 	{
 		this.logger = logger;
 		this.trackCooldownManager = trackCooldownManager;
@@ -158,22 +157,41 @@ public class Playback
 		}
 	}
 
-	[SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
-	private MusicTrack? FindNextTrack()
+	/// <summary>
+	/// The draw, and the shape of it - the counts go to the history log, where a repeat
+	/// has to be explicable.
+	/// </summary>
+	private TrackStart? FindNextTrack()
 	{
 		if (CurrentPlaylist == null)
 			return null;
 
-		var filteredTracks = CurrentPlaylist.GetTracks(TrackFilterPredicate);
+		var fit = CurrentPlaylist.GetTracks(TrackFilterPredicate).ToList();
+		var fresh = fit.Where(track => !trackCooldownManager.IsOnCooldown(track)).ToList();
 
-		return TrackSelector.Select(filteredTracks.Where(track => !trackCooldownManager.IsOnCooldown(track)))
-		       // Everything that fits has played recently. Going round again beats sitting
-		       // in silence, but not straight back into the track that just finished - a
-		       // skip that plays the same song again reads as a broken skip. The game's own
-		       // engine refuses its LastPlayedTrack for the same reason.
-		       ?? TrackSelector.Select(filteredTracks.Where(track => track != lastPlayedTrack))
-		       // Unless it really is the only thing that fits.
-		       ?? TrackSelector.Select(filteredTracks);
+		var how = TrackStart.Tier.Fresh;
+		var track = TrackSelector.Select(fresh);
+
+		// Everything that fits has played recently. Going round again beats sitting in
+		// silence, but not straight back into the track that just finished - a skip that
+		// plays the same song again reads as a broken skip. The game's own engine refuses
+		// its LastPlayedTrack for the same reason.
+		if (track == null)
+		{
+			how = TrackStart.Tier.Recycled;
+			track = TrackSelector.Select(fit.Where(t => t != lastPlayedTrack));
+		}
+
+		// Unless it really is the only thing that fits.
+		if (track == null)
+		{
+			how = TrackStart.Tier.OnlyFit;
+			track = TrackSelector.Select(fit);
+		}
+
+		return track == null
+			? null
+			: new TrackStart(track, CurrentPlaylist.Situation, CurrentPlaylist.Tracks.Count, fit.Count, fresh.Count, how);
 	}
 
 	private bool TrackFilterPredicate(MusicTrack track)
@@ -278,15 +296,16 @@ public class Playback
 		// happened, not one still owed.
 		startWhenQuiet = false;
 
-		var track = FindNextTrack();
-		if (track != null)
+		var start = FindNextTrack();
+		if (start != null)
 		{
-			PlayTrack(track);
+			PlayTrack(start);
 		}
 	}
 
-	private void PlayTrack(MusicTrack track)
+	private void PlayTrack(TrackStart start)
 	{
+		var track = start.Track;
 		lastPlayedTrack = track;
 		CurrentTrack = track;
 		currentTrackStartedMs = getCurrentTimeMs();
@@ -297,7 +316,7 @@ public class Playback
 		}
 
 		logger.Notification($"Playing track: {track.Name}");
-		onTrackStarted?.Invoke(track);
+		onTrackStarted?.Invoke(start);
 	}
 
 	public void StopTrack(float fadeOutTimeS = 2f)

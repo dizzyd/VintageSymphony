@@ -363,6 +363,13 @@ The knobs, all optional:
   scores. If `danger` is high indoors, something is lurking outside. If `cave`
   is high in your base, the room is not sealed, or is bigger than the game
   will call a room.
+- **The same few songs keep coming round.** Every track start is written to
+  `ModData/vintagesymphonyforked/track-history.log` with how many tracks fit the
+  moment and how many of those were off cooldown. The switch for it is in
+  `.music config`, and the file is kept under a megabyte. A small "fit" number means the
+  hour, season or situation rules are narrowing the pool; a small "off cooldown"
+  number means the pool is fine and the cooldown is what repeats. Send the file
+  along when reporting it.
 - **You edited a file and nothing changed.** Track lists are read when a world
   loads. Go back to the main menu and load it again.
 - **The log says `Could not read sources.json ... Using the default music sources`.**
