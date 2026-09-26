@@ -5,21 +5,15 @@ namespace VintageSymphony.Engine;
 /// <summary>
 /// Which of the tracks that fit gets played.
 ///
-/// A shuffle bag, not a cooldown. Every draw is from the half of what fits that has gone
-/// longest unheard, so a track cannot come back until about half of what fits has played
-/// since - however few or many that is. A fixed cooldown could not do that: the pack's
-/// default rotation plays around fifty tracks in four hours from the twenty or so that
-/// fit at any one moment, so every track came back the moment its thirty minutes were
-/// up, and a playlist of two alternated them all afternoon.
+/// A shuffle bag: every draw is from the longest-unheard half of what may play, so a track
+/// cannot come back until about half of that has played since, however big the pool.
+/// Tracks inside their cooldown are drawn from only when nothing that fits is outside one.
 ///
-/// Priority weights the draw within the bag rather than deciding it. The weight is
-/// priority to the sixteenth: 1.05 about doubles a track's chance, 1.1 makes it about
-/// five times as likely, and 1.5 or more wins whenever it is in the bag. The bag is what
-/// stops a favoured track winning twice running - once played, it is at the back.
-///
-/// Drawing on Priority alone, which this did before the draw had a roll in it, was not
-/// a draw at all: the highest number among the tracks that currently fit won every
-/// single time, and a pack with two 1.05 daytime tracks played nothing else by day.
+/// Priority weights the draw within the bag rather than deciding it. Above 1 the weight is
+/// priority to the sixteenth: 1.05 about doubles a track's chance, 1.1 makes it about five
+/// times as likely, and 1.5 or more wins whenever it is in the bag. Below 1 it is the
+/// priority itself, so 0.5 is half as likely rather than never. Once played, a favoured
+/// track is at the back of the bag like any other.
 /// </summary>
 public static class TrackSelector
 {
@@ -38,32 +32,39 @@ public static class TrackSelector
 	/// <param name="fit">Everything that may play now.</param>
 	/// <param name="lastHeard">When a track's piece was last heard, or null if never.</param>
 	/// <param name="isOnCooldown">A track still inside its cooldown yields to any that is not.</param>
-	/// <param name="previous">What just played: never again straight away, unless it is all there is.</param>
+	/// <param name="previous">What just played: its piece is not drawn again straight away unless it is all that fits.</param>
 	public static MusicTrack? Draw(
 		IReadOnlyList<MusicTrack> fit,
 		Func<MusicTrack, long?> lastHeard,
 		Func<MusicTrack, bool> isOnCooldown,
 		MusicTrack? previous)
 	{
-		var others = fit.Where(t => t != previous).ToList();
-		var candidates = others.Count > 0 ? others : fit.ToList();
+		// Not the piece just played - whole or stems - while a different piece fits; then
+		// not the same track; then, if it is all there is, anything.
+		var piece = previous == null ? null : PieceOf(previous);
+		var candidates = fit.Where(t => PieceOf(t) != piece).ToList();
+		if (candidates.Count == 0) candidates = fit.Where(t => t != previous).ToList();
+		if (candidates.Count == 0) candidates = fit.ToList();
 		if (candidates.Count == 0)
 		{
 			return null;
 		}
 
-		// Longest unheard first, and never heard before everything. The order they arrive
-		// in must not decide ties - a new session has nothing heard at all.
-		var bag = candidates
+		// Cooldown first, then age. The two do not agree: a favoured track's cooldown runs
+		// a quarter longer, so the longest-unheard track can still be cooling while one
+		// heard after it is not.
+		var rested = candidates.Where(t => !isOnCooldown(t)).ToList();
+		var pool = rested.Count > 0 ? rested : candidates;
+
+		// Never heard sorts before everything, and arrival order must not decide ties - a
+		// new session has nothing heard at all.
+		var bag = pool
 			.OrderBy(_ => Random.Shared.Next())
 			.OrderBy(t => lastHeard(t) ?? long.MinValue)
-			.Take(Math.Max(1, (int)Math.Ceiling(candidates.Count * BagFraction)))
+			.Take(Math.Max(1, (int)Math.Ceiling(pool.Count * BagFraction)))
 			.ToList();
 
-		// The bag's front is what has gone longest unheard, so anything off cooldown is
-		// already in it; this only narrows a bag that runs on into the recently heard.
-		var rested = bag.Where(t => !isOnCooldown(t)).ToList();
-		return Select(rested.Count > 0 ? rested : bag, previous);
+		return Select(bag, previous);
 	}
 
 	/// <summary>

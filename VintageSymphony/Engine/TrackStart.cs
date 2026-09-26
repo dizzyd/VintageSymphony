@@ -25,7 +25,11 @@ public sealed record TrackStart(
 		/// <summary>Drawn from the tracks that fit and were off cooldown.</summary>
 		Fresh,
 
-		/// <summary>Everything that fit was on cooldown; drawn from them anyway, bar the last played.</summary>
+		/// <summary>
+		/// The track chosen was still on cooldown. The draw takes one only when no track it
+		/// could choose is off cooldown - and the track just played is not one it could
+		/// choose, so that one may be off cooldown here.
+		/// </summary>
 		Recycled,
 
 		/// <summary>The only track that fit, cooldown or not.</summary>

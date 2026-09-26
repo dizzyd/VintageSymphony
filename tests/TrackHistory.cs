@@ -62,7 +62,9 @@ namespace VintageSymphony.Tests
                     .Record(new Engine.TrackStart(hearth, Calm, 12, 3, 0, Engine.TrackStart.Tier.Recycled));
                 var last = File.ReadAllLines(path).Last();
                 Assert.True(last.Contains("play #3 this sitting"), "the third play counted across logs: " + last);
-                Assert.True(last.EndsWith("; everything that fit was on cooldown"), "the recycled reason: " + last);
+                var reason = last.Substring(last.IndexOf("off cooldown") + "off cooldown".Length);
+                Assert.True(reason.StartsWith("; ") && reason.Contains("cooldown"), "a recycled start gives its reason: " + last);
+                Assert.False(lines[2].EndsWith(reason), "and not the only-fit one: " + last);
             }
             finally
             {
@@ -131,10 +133,22 @@ namespace VintageSymphony.Tests
             var wasMusicLevel = ClientSettings.MusicLevel;
             var wasLogging = VS.Configuration.LogTrackHistory;
             var path = engine.TrackHistoryPath;
-            var linesBefore = File.Exists(path) ? File.ReadAllLines(path).Length : 0;
+
+            // The file rotates, so counting lines already in it proves nothing - a trim on
+            // this very append drops them. Set the player's history aside on disk, start
+            // from an empty file, and put it back afterwards.
+            var backup = path + ".testbackup";
+            var hadHistory = File.Exists(path);
+            if (hadHistory) File.Copy(path, backup, overwrite: true);
+            if (hadHistory) File.Delete(path);
 
             try
             {
+                // Over the limit already, so this start's own append is the one that trims:
+                // the case a line count taken beforehand got wrong.
+                File.WriteAllLines(path, Enumerable.Repeat(new string('x', 128), 9000));
+                Assert.Greater(new FileInfo(path).Length, Engine.TrackHistoryLog.DefaultMaxBytes, "seeded past the limit");
+
                 VS.Configuration.LogTrackHistory = true;
                 curator.Tracks = VanillaTracks().OfType<SurfaceMusicTrack>().Select(OpenedUp).ToList();
                 ClientSettings.MusicLevel = 20;
@@ -148,7 +162,8 @@ namespace VintageSymphony.Tests
                 var playlist = engine.Playback.CurrentPlaylist.Situation;
 
                 Assert.True(File.Exists(path), "the history file exists at " + path);
-                var fresh = File.ReadAllLines(path).Skip(linesBefore).ToList();
+                Assert.LessOrEqual(new FileInfo(path).Length, Engine.TrackHistoryLog.DefaultMaxBytes, "the file was trimmed");
+                var fresh = File.ReadAllLines(path).Where(l => !l.StartsWith("xxxx")).ToList();
                 Log(string.Join("\n", fresh));
                 var line = fresh.LastOrDefault(l => l.Contains("[" + track.Location + "]"));
                 Assert.NotNull(line, "a line for " + track.Location);
@@ -161,6 +176,16 @@ namespace VintageSymphony.Tests
                 ClientSettings.MusicLevel = wasMusicLevel;
                 VS.Configuration.LogTrackHistory = wasLogging;
                 curator.Tracks = new List<Engine.MusicTrack>();
+
+                if (hadHistory)
+                {
+                    File.Copy(backup, path, overwrite: true);
+                    File.Delete(backup);
+                }
+                else if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
             }
         }
 

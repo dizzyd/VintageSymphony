@@ -98,21 +98,26 @@ namespace VintageSymphony.Tests
         }
 
         /// <summary>
-        /// The game's music is weighed by the game's own priority: the wrapper carries it
-        /// across, so a village track at 1.5 is favoured here as it is in the game.
+        /// The game's music keeps the game's priorities in the draw: a village track at 1.5
+        /// is the game saying "this one, here", and it should outdraw a pool of ordinary
+        /// tracks the way it does in the game rather than be flattened to 1 by the wrapper.
         /// </summary>
         [VsTest, RequiresClient]
-        public async Task WrappedTracksAreWeighedByTheGamesPriority()
+        public async Task AFavouredGameTrackOutdrawsOrdinaryOnes()
         {
             await OnClient();
 
-            var wrapped = VanillaTracks().OfType<SurfaceMusicTrack>().FirstOrDefault();
-            Assert.NotNull(wrapped, "a vanilla surface track to wrap");
+            var village = new Engine.MusicTrackWrapper(new SurfaceMusicTrack
+            {
+                Location = new AssetLocation("game", "music/peaceful-village.ogg"),
+                Priority = 1.5f
+            });
+            var pack = Enumerable.Range(0, 10).Select(i => Track("ordinary" + i, 1f)).ToList();
+            pack.Add(village);
 
-            var wrapper = new Engine.MusicTrackWrapper(wrapped);
-            Assert.Equal(wrapped.Priority, wrapper.Priority, "the wrapper carries the game's priority");
-            Assert.Equal(System.Math.Pow(wrapped.Priority, 16), Engine.TrackSelector.Weight(wrapper),
-                "and the draw weighs it by that");
+            var won = Enumerable.Range(0, 500).Count(_ => Engine.TrackSelector.Select(pack) == village);
+            Log("draws won by the wrapped 1.5 track against ten at 1: " + won + " of 500");
+            Assert.Greater(won, 450, "draws won by the wrapped village track");
         }
 
         // ---- cooldown ---------------------------------------------------------

@@ -3,6 +3,9 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
+using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
@@ -85,8 +88,10 @@ namespace VintageSymphony.Tests
                 var props = VS.ClientMain.playerProperties;
                 var pos = Capi.World.Player.Entity.Pos.AsBlockPos;
                 var climate = Capi.World.BlockAccessor.GetClimateAt(pos);
+                // The survival/creative split is the mod's setting, off by default: ask the
+                // game with the playlist opened up when it is off, as the wrapper does.
                 var verdicts = vanilla.OfType<SurfaceMusicTrack>()
-                    .ToDictionary(t => t, t => t.GetPlayTestCode(props, climate, pos));
+                    .ToDictionary(t => t, t => VerdictUnderTheSplitSetting(t, props, climate, pos));
                 var playable = verdicts.Where(v => v.Value == "ok").Select(v => v.Key.Name).ToHashSet();
                 Log("the game's verdicts: " + string.Join("  ", verdicts.Values
                     .GroupBy(v => v).OrderByDescending(g => g.Count())
@@ -107,8 +112,9 @@ namespace VintageSymphony.Tests
                 await Until(() => engine.CurrentMusicTrack != null, 900, "a track was selected");
 
                 var track = engine.CurrentMusicTrack;
+                var verdictThen = verdicts.FirstOrDefault(v => v.Key.Name == track.Name).Value ?? "not a vanilla track";
                 Assert.True(playable.Contains(track.Name),
-                    "the selected track " + track.Name + " is one the game would play");
+                    "the selected track " + track.Name + " is one the game would play (it said '" + verdictThen + "')");
                 await Until(() => track.IsPlaying, 300, "the selected track starts playing");
 
                 Log("playing " + track.Name + " [" + track.Situation + "] from the " +
@@ -128,6 +134,26 @@ namespace VintageSymphony.Tests
         }
 
         // ---- helpers ----------------------------------------------------------
+
+        static string VerdictUnderTheSplitSetting(SurfaceMusicTrack track, TrackedPlayerProperties props,
+            ClimateCondition climate, BlockPos pos)
+        {
+            if (VS.Configuration.HonourGamePlaylists)
+            {
+                return track.GetPlayTestCode(props, climate, pos);
+            }
+
+            var onPlayList = track.OnPlayList;
+            track.OnPlayList = "*";
+            try
+            {
+                return track.GetPlayTestCode(props, climate, pos);
+            }
+            finally
+            {
+                track.OnPlayList = onPlayList;
+            }
+        }
 
         // The calendar is the server's; these hop over and come back.
         static async Task<double> CalendarHours()

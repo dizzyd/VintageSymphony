@@ -2,15 +2,19 @@ namespace VintageSymphony.Engine;
 
 public class TrackCooldownManager
 {
+	/// <summary>
+	/// Keyed by piece, as the listening history is: a whole track and its stems are one
+	/// piece of music, and one of them cooling must cool the other.
+	/// </summary>
 	private class TrackCooldown
 	{
 		public readonly long CooldownUntil;
-		public readonly MusicTrack Track;
+		public readonly string Piece;
 
 		public TrackCooldown(long cooldownUntil, MusicTrack track)
 		{
 			CooldownUntil = cooldownUntil;
-			Track = track;
+			Piece = TrackSelector.PieceOf(track);
 		}
 	}
 
@@ -41,7 +45,8 @@ public class TrackCooldownManager
 	public bool IsOnCooldown(MusicTrack musicTrack)
 	{
 		var now = currentTimeMs();
-		return tracksOnCooldown.Exists(t => t.Track == musicTrack && now < t.CooldownUntil);
+		var piece = TrackSelector.PieceOf(musicTrack);
+		return tracksOnCooldown.Exists(t => t.Piece == piece && now < t.CooldownUntil);
 	}
 
 	public void CleanupRoutine()
@@ -52,7 +57,8 @@ public class TrackCooldownManager
 
 	public void Remove(MusicTrack musicTrack)
 	{
-		tracksOnCooldown.RemoveAll(t => t.Track == musicTrack);
+		var piece = TrackSelector.PieceOf(musicTrack);
+		tracksOnCooldown.RemoveAll(t => t.Piece == piece);
 	}
 
 	private long GetCooldownEndTime(MusicTrack musicTrack)

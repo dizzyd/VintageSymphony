@@ -70,7 +70,7 @@ public class TrackHistoryLog
 	{
 		var how = start.How switch
 		{
-			TrackStart.Tier.Recycled => "; everything that fit was on cooldown",
+			TrackStart.Tier.Recycled => "; chosen while still on cooldown - no other candidate was off it",
 			TrackStart.Tier.OnlyFit => "; the only track that fit",
 			_ => "",
 		};

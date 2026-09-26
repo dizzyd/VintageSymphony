@@ -42,6 +42,158 @@ namespace VintageSymphony.Tests
         }
 
         /// <summary>
+        /// Oldest is not the same as off cooldown: a favoured track cools a quarter longer.
+        /// A (1.05) played at minute 0 cools until 37.5; B played at 5 cools until 35; C
+        /// played at 35. At 36, A is the longest unheard and still cooling, B is free -
+        /// and the bag used to take its oldest half first, which was A alone.
+        /// </summary>
+        [VsTest, RequiresClient]
+        public async Task ATrackOffCooldownBeatsAnOlderOneStillCooling()
+        {
+            await OnClient();
+
+            for (var round = 0; round < 20; round++)
+            {
+                var a = Track("a", 1.05f);
+                var b = Track("b");
+                var c = Track("c");
+
+                long now = 0;
+                var cooldowns = new Engine.TrackCooldownManager(() => now);
+                var starts = new List<Engine.TrackStart>();
+                var playback = new Engine.Playback(Capi.Logger, cooldowns,
+                    () => new TrackedPlayerProperties { sunSlight = 15 }, () => now, starts.Add);
+                cooldowns.SetCooldownDuration(30 * 60_000L);
+
+                void PlayAlone(Engine.MusicTrack track, long minute)
+                {
+                    now = minute * 60_000L;
+                    playback.Play(new Engine.Playlist(Calm, new[] { track }));
+                    playback.NextTrack();
+                }
+
+                PlayAlone(a, 0);
+                PlayAlone(b, 5);
+                PlayAlone(c, 35);
+
+                now = 36 * 60_000L;
+                playback.Play(new Engine.Playlist(Calm, new[] { a, b, c }));
+                Assert.True(cooldowns.IsOnCooldown(a), "A is still cooling at minute 36");
+                Assert.False(cooldowns.IsOnCooldown(b), "B is not");
+                playback.NextTrack();
+                playback.StopTrack(0f);
+
+                var start = starts.Last();
+                Assert.True(start.Track == b, "round " + round + ": the draw took " + start.Track.Name);
+                Assert.Equal(Engine.TrackStart.Tier.Fresh, start.How, "and the log calls it fresh");
+            }
+        }
+
+        /// <summary>
+        /// The whole piece at minute 4 after another song at 0, both still cooling at 8. The
+        /// stems version is the same piece: it must neither follow the whole straight away
+        /// nor count as rested because a different track object cooled. The other song goes
+        /// round again instead.
+        /// </summary>
+        [VsTest, RequiresClient]
+        public async Task StemsDoNotFollowTheirWholePieceEvenWhenTheRestIsCooling()
+        {
+            await OnClient();
+
+            for (var round = 0; round < 20; round++)
+            {
+                var whole = Track("jon_algar_-_campfire_legends");
+                var stems = Track("jon_algar_-_campfire_legends_stems_melody");
+                var other = Track("different_song");
+                var rig = new Rig();
+
+                rig.PlayAlone(other, 0);
+                rig.PlayAlone(whole, 4);
+                var stemsCooling = rig.Cooldowns.IsOnCooldown(stems);
+
+                var start = rig.DrawFrom(8, whole, stems, other);
+                Assert.True(start.Track == other, "round " + round + ": after the whole piece came " + start.Track.Name);
+                Assert.Equal(Engine.TrackStart.Tier.Recycled, start.How, "a pick still on cooldown");
+                Assert.True(stemsCooling, "the stems cooled with their whole piece");
+            }
+        }
+
+        /// <summary>When one piece is all that fits, its other version still plays rather than nothing.</summary>
+        [VsTest, RequiresClient]
+        public async Task ThePiecesOtherVersionPlaysWhenItIsAllThatFits()
+        {
+            await OnClient();
+
+            var whole = Track("jon_algar_-_campfire_legends");
+            var stems = Track("jon_algar_-_campfire_legends_stems_melody");
+            var rig = new Rig();
+
+            rig.PlayAlone(whole, 0);
+            var start = rig.DrawFrom(4, whole, stems);
+            Assert.True(start.Track == stems, "the other version, not the track just played: " + start.Track.Name);
+        }
+
+        /// <summary>
+        /// A recycled pick can sit beside a track off cooldown: the one just played, when it
+        /// opts out of cooldowns. The start must say that the pick was cooling without
+        /// claiming everything that fit was.
+        /// </summary>
+        [VsTest, RequiresClient]
+        public async Task ARecycledPickBesideARestedPreviousTrackIsExplained()
+        {
+            await OnClient();
+
+            var free = Track("free");
+            free.DisableCooldown = true;
+            var cooling = Track("cooling");
+            var rig = new Rig();
+
+            rig.PlayAlone(cooling, 0);
+            rig.PlayAlone(free, 1);
+            var start = rig.DrawFrom(2, free, cooling);
+
+            Assert.True(start.Track == cooling, "the other track, not the one just played");
+            Assert.Equal(Engine.TrackStart.Tier.Recycled, start.How, "the pick was still cooling");
+            Assert.Equal(2, start.Fit, "tracks that fit");
+            Assert.Equal(1, start.OffCooldown, "one of them off cooldown - the one just played");
+
+            var line = Engine.TrackHistoryLog.Describe(start, 1, DateTime.Now);
+            Log(line);
+            Assert.True(line.Contains("fit 2 of 2, 1 off cooldown; "), "the counts, then a reason: " + line);
+        }
+
+        /// <summary>
+        /// When everything but the track just played is cooling, the draw goes round again
+        /// rather than falling silent, and the log says the pick was recycled.
+        /// </summary>
+        [VsTest, RequiresClient]
+        public async Task AllCoolingIsRecycledAndSaysSo()
+        {
+            await OnClient();
+
+            var a = Track("a");
+            var b = Track("b");
+            long now = 0;
+            var cooldowns = new Engine.TrackCooldownManager(() => now);
+            cooldowns.SetCooldownDuration(30 * 60_000L);
+            var starts = new List<Engine.TrackStart>();
+            var playback = new Engine.Playback(Capi.Logger, cooldowns,
+                () => new TrackedPlayerProperties { sunSlight = 15 }, () => now, starts.Add);
+            playback.Play(new Engine.Playlist(Calm, new[] { a, b }));
+
+            playback.NextTrack();
+            now += 3 * 60_000L;
+            playback.NextTrack();
+            now += 3 * 60_000L;
+            playback.NextTrack();
+            playback.StopTrack(0f);
+
+            Assert.Equal(Engine.TrackStart.Tier.Fresh, starts[1].How, "the second track had not played");
+            Assert.Equal(Engine.TrackStart.Tier.Recycled, starts[2].How, "the third start came round again");
+            Assert.True(starts[2].Track == starts[0].Track, "to the first track, not the one just played");
+        }
+
+        /// <summary>
         /// A track at priority 3 wins every draw it is in, as it always has - but once
         /// played it is at the back of the bag, and has to wait its turn like the rest.
         /// Before, it won every draw outright and played back to back with itself bar one.
@@ -199,26 +351,53 @@ namespace VintageSymphony.Tests
             Assert.False(starts.Any(s => s.Track.Name == "calm-only"), "the lender's track never played");
         }
 
-        /// <summary>The curator lends Calm to the peaceful playlists, and to nothing else.</summary>
+        /// <summary>
+        /// Through the curator, as the engine runs it: standing still with two Idle tracks
+        /// and ten Calm ones, the Calm ones play too. In a fight with two fight tracks,
+        /// they do not - a thin fight playlist is not to be padded with peaceful music.
+        /// </summary>
         [VsTest, RequiresClient]
-        public async Task CalmIsLentToThePeacefulPlaylistsOnly()
+        public async Task OnlyThePeacefulSituationsReachForCalm()
         {
             await OnClient();
 
-            var curator = new Engine.MusicCurator(Capi, () => new List<Situations.Scoring.SituationAssessment>(),
-                new Engine.Playback(Capi.Logger, new Engine.TrackCooldownManager(() => 0L),
-                    () => new TrackedPlayerProperties(), () => 0L), () => 0L);
-            curator.Tracks = new List<Engine.MusicTrack> { Track("x") };
+            var idleTracks = new[] { Track("idle-a", situation: "idle"), Track("idle-b", situation: "idle") };
+            var fightTracks = new[] { Track("fight-a", situation: "fight"), Track("fight-b", situation: "fight") };
+            var calmTracks = Enumerable.Range(0, 10).Select(i => Track("calm" + i)).ToList();
 
-            var playlists = (Dictionary<Situations.Situation, Engine.Playlist>)typeof(Engine.MusicCurator)
-                .GetField("playlists", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-                .GetValue(curator)!;
-
-            foreach (var (situation, playlist) in playlists)
+            foreach (var (leader, own) in new[] { (Idle, idleTracks), (Fight, fightTracks) })
             {
-                var lends = situation is Idle or Adventure or Keep;
-                Assert.Equal(lends ? Calm : (Situations.Situation?)null, playlist.Borrows?.Situation,
-                    situation + " borrows from");
+                long now = 1_000_000L;
+                var starts = new List<Engine.TrackStart>();
+                var playback = new Engine.Playback(Capi.Logger, new Engine.TrackCooldownManager(() => now),
+                    () => new TrackedPlayerProperties { sunSlight = 15 }, () => now, starts.Add);
+                var ranked = Enum.GetValues<Situations.Situation>()
+                    .Select(s => new Situations.Scoring.SituationAssessment(s, s == leader ? 1f : 0f))
+                    .OrderByDescending(a => a.WeightedScore).ToList();
+                var curator = new Engine.MusicCurator(Capi, () => ranked, playback, () => now);
+                curator.Tracks = idleTracks.Concat(fightTracks).Concat(calmTracks).ToList();
+
+                curator.Update(1f);
+                Assert.Equal(leader, playback.CurrentPlaylist?.Situation, "the playlist the curator chose");
+                for (var i = 0; i < 30; i++)
+                {
+                    now += 5 * 60_000L;
+                    playback.NextTrack();
+                }
+
+                playback.StopTrack(0f);
+
+                var fromCalm = starts.Count(s => calmTracks.Contains(s.Track));
+                Log($"{leader}: {starts.Count} starts, {fromCalm} of them Calm's");
+                if (leader == Idle)
+                {
+                    Assert.Greater(fromCalm, 10, "Calm's tracks played while idle");
+                    Assert.Greater(starts.Count(s => own.Contains(s.Track)), 0, "and Idle's own still did");
+                }
+                else
+                {
+                    Assert.Equal(0, fromCalm, "Calm's tracks played during the fight");
+                }
             }
         }
 
@@ -299,6 +478,36 @@ namespace VintageSymphony.Tests
             }
 
             return closest;
+        }
+
+        /// <summary>A Playback on a fake clock, with a thirty-minute cooldown and no variance.</summary>
+        class Rig
+        {
+            long now;
+            public readonly Engine.TrackCooldownManager Cooldowns;
+            readonly Engine.Playback playback;
+            readonly List<Engine.TrackStart> starts = new();
+
+            public Rig()
+            {
+                Cooldowns = new Engine.TrackCooldownManager(() => now);
+                Cooldowns.SetCooldownDuration(30 * 60_000L);
+                playback = new Engine.Playback(Capi.Logger, Cooldowns,
+                    () => new TrackedPlayerProperties { sunSlight = 15 }, () => now, starts.Add);
+            }
+
+            public void PlayAlone(Engine.MusicTrack track, long minute) => DrawFrom(minute, track);
+
+            public Engine.TrackStart DrawFrom(long minute, params Engine.MusicTrack[] tracks)
+            {
+                now = minute * 60_000L;
+                var before = starts.Count;
+                playback.Play(new Engine.Playlist(Calm, tracks));
+                playback.NextTrack();
+                playback.StopTrack(0f);
+                Assert.Equal(before + 1, starts.Count, "a track started at minute " + minute);
+                return starts[^1];
+            }
         }
 
         static Engine.MusicTrack Track(string name, float priority = 1f, string artist = null,

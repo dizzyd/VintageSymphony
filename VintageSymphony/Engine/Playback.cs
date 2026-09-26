@@ -197,10 +197,9 @@ public class Playback
 			return null;
 		}
 
-		// The draw only reaches a track inside its cooldown when nothing that fits is
-		// outside one; the tiers say which of those happened, for the log.
+		// Read off the track the draw chose, not the pool it chose from.
 		var how = fit.Count == 1 ? TrackStart.Tier.OnlyFit
-			: offCooldown == 0 ? TrackStart.Tier.Recycled
+			: trackCooldownManager.IsOnCooldown(track) ? TrackStart.Tier.Recycled
 			: TrackStart.Tier.Fresh;
 
 		return new TrackStart(track, CurrentPlaylist.Situation, CurrentPlaylist.Tracks.Count, fit.Count, offCooldown,
