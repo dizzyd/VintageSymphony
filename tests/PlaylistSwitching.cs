@@ -225,6 +225,174 @@ namespace VintageSymphony.Tests
         }
 
         /// <summary>
+        /// The game's scripted music beats a temporal storm's. Silence weighs 2 and the
+        /// storm 10, so this cannot be left to the ranking: the curator has to defer on
+        /// the fact alone, and pick the storm back up when the game's track is over.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task AScriptedTrackOverridesATemporalStorm() =>
+            await TheGameKeepsTheMusicOver(Situations.Situation.TemporalStorm, "temporalstorm");
+
+        /// <summary>The same over death, which weighs 20 - the heaviest situation there is.</summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task AScriptedTrackOverridesDeath() =>
+            await TheGameKeepsTheMusicOver(Situations.Situation.Dead, "dead");
+
+        /// <summary>
+        /// The other way the takeover meets our music: the game's track starts while ours
+        /// is still loading. There is no sound to fade yet; the stop has to cancel the load,
+        /// so that the sound arriving afterwards is stopped instead of played over the game's.
+        /// </summary>
+        [VsTest(TimeoutMs = 120000), RequiresClient]
+        public async Task AScriptedTrackCancelsOneOfOursStillLoading()
+        {
+            await OnClient();
+
+            var wasMusicLevel = ClientSettings.MusicLevel;
+            long now = 1_000_000L;
+            var scripted = false;
+
+            var vanilla = VanillaSurfaceTracks().Take(1).ToList();
+            Assert.Equal(1, vanilla.Count, "a vanilla track to borrow audio from");
+            var track = OpenedUp(vanilla[0], "temporalstorm");
+
+            var playback = new Engine.Playback(Capi.Logger, new Engine.TrackCooldownManager(() => now),
+                () => VS.ClientMain.playerProperties, () => now);
+            playback.SetMusicFrequency(3);
+            var ranked = System.Enum.GetValues<Situations.Situation>()
+                .Select(s => new Situations.Scoring.SituationAssessment(s, s == Situations.Situation.TemporalStorm ? 1f : 0f))
+                .OrderByDescending(x => x.WeightedScore).ToList();
+            var curator = new Engine.MusicCurator(Capi, () => ranked, playback, () => now, () => scripted);
+            curator.Tracks = new List<Engine.MusicTrack> { track };
+
+            try
+            {
+                ClientSettings.MusicLevel = 20;
+
+                // Selecting the storm playlist sets it; the next playback update starts the
+                // track (there is no pause at this frequency), and the load is under way
+                // before that returns.
+                curator.Update(1f);
+                playback.Update(1f);
+                Assert.True(playback.CurrentTrack == track, "our track was started");
+                if (track.Sound != null)
+                {
+                    Skip("the track loaded synchronously; there was no pending load to cancel");
+                }
+
+                Assert.True(track.IsPlaying, "our track is loading");
+
+                // The game speaks before our load lands.
+                scripted = true;
+                curator.Update(1f);
+                playback.Update(1f);
+                Assert.Null(playback.CurrentTrack, "no track of ours is selected");
+
+                // Long enough for the load to finish; nothing may be heard when it does.
+                var heard = false;
+                for (var i = 0; i < 200; i++)
+                {
+                    heard |= track.Sound?.IsPlaying == true;
+                    await Ticks(1);
+                }
+
+                Assert.False(heard, "our track was heard after the game took over");
+                Assert.False(track.IsPlaying, "and is neither playing nor loading");
+            }
+            finally
+            {
+                playback.StopTrack(0f);
+                ClientSettings.MusicLevel = wasMusicLevel;
+            }
+        }
+
+        static async Task TheGameKeepsTheMusicOver(Situations.Situation situation, string tag)
+        {
+            await OnClient();
+
+            var wasMusicLevel = ClientSettings.MusicLevel;
+            long now = 1_000_000L;
+            var scripted = false;
+
+            var vanilla = VanillaSurfaceTracks().Take(1).ToList();
+            Assert.Equal(1, vanilla.Count, "a vanilla track to borrow audio from");
+            var track = OpenedUp(vanilla[0], tag);
+
+            var playback = new Engine.Playback(Capi.Logger, new Engine.TrackCooldownManager(() => now),
+                () => VS.ClientMain.playerProperties, () => now);
+            playback.SetMusicFrequency(3);
+
+            var ranked = System.Enum.GetValues<Situations.Situation>()
+                .Select(s => new Situations.Scoring.SituationAssessment(s, 0f)).ToList();
+            ranked.First(a => a.Situation == situation).Score = 1f;
+            ranked = ranked.OrderByDescending(x => x.WeightedScore).ToList();
+
+            var curator = new Engine.MusicCurator(Capi, () => ranked, playback, () => now, () => scripted);
+            curator.Tracks = new List<Engine.MusicTrack> { track };
+
+            try
+            {
+                ClientSettings.MusicLevel = 20;
+
+                curator.Update(1f);
+                playback.Update(1f);
+                Assert.NotNull(playback.CurrentPlaylist, "a playlist before the game speaks");
+                Assert.Equal(situation, playback.CurrentPlaylist.Situation, "the playlist before the game speaks");
+                // Sounding, not merely loading - see ScriptedTracks.
+                await Until(() => track.Sound?.IsPlaying == true, 300, "its track sounds");
+                var sound = track.Sound;
+                Log(situation + " weighs " + ranked.First().WeightedScore.ToString("0") + " against Silence's "
+                    + Situations.Situation.Silence.Attributes().Weight.ToString("0"));
+
+                // The game starts a track of its own.
+                scripted = true;
+                now += 1_000L;
+                curator.Update(1f);
+                playback.Update(1f);
+                Assert.Equal(Situations.Situation.Silence, playback.CurrentPlaylist.Situation,
+                    "the playlist while the game's track plays");
+                Assert.Null(playback.CurrentTrack, "no track of ours is selected");
+
+                // The fade's deadline is on the fake clock and the fade itself is real time,
+                // so the clock runs at the speed of the ticks until the track goes quiet.
+                // Only a sound the track still holds is asked: the fade's end disposes it.
+                bool Sounding() => track.Sound == sound && sound.IsPlaying;
+                for (var i = 0; i < 400 && Sounding(); i++)
+                {
+                    now += 50L;
+                    playback.Update(0.05f);
+                    await Ticks(1);
+                }
+
+                Assert.False(Sounding(), "our track's sound has stopped");
+                Assert.False(track.IsPlaying, "and the track knows it");
+
+                // And stays quiet for as long as the game's lasts, however high the score.
+                for (var second = 0; second < 5; second++)
+                {
+                    now += 1_000L;
+                    curator.Update(1f);
+                    playback.Update(1f);
+                }
+
+                Assert.Null(playback.CurrentTrack, "nothing of ours started over the game's track");
+                Assert.Equal(Situations.Situation.Silence, playback.CurrentPlaylist.Situation, "still standing down");
+
+                // The game's track ends; the situation is still on, and gets its music back.
+                scripted = false;
+                now += 1_000L;
+                curator.Update(1f);
+                playback.Update(1f);
+                Assert.Equal(situation, playback.CurrentPlaylist.Situation, "the playlist once the game's track is over");
+            }
+            finally
+            {
+                playback.StopTrack(0f);
+                ClientSettings.MusicLevel = wasMusicLevel;
+            }
+        }
+
+        /// <summary>
         /// The same audio as a vanilla track, opened up to one situation and nothing else
         /// that could exclude it. Initialize rebuilds "music/&lt;path&gt;.ogg", so it wants
         /// the bare name back.

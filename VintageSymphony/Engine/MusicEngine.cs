@@ -82,7 +82,8 @@ public class MusicEngine : BaseModSystem
 			clientApi!,
 			() => situationAssessor.Assessments,
 			playback,
-			() => clientApi!.ElapsedMilliseconds);
+			() => clientApi!.ElapsedMilliseconds,
+			() => situationAssessor.SituationalFacts.ScriptedTrackPlaying);
 
 		// Set the initial music frequency
 		playback.SetMusicFrequency(ClientSettings.MusicFrequency);

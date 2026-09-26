@@ -14,6 +14,7 @@ public class MusicCurator
 	private List<MusicTrack> tracks = new();
 	private readonly Dictionary<Situation, Playlist> playlists = new();
 	private readonly PlaylistSwitchGate switchGate;
+	private readonly Func<bool> gameHasTheMusic;
 
 	/// <summary>The situations as the assessor ranks them, best first.</summary>
 	public IList<SituationAssessment> Assessments => getAssessments();
@@ -32,15 +33,18 @@ public class MusicCurator
 
 	/// <param name="getAssessments">The assessor's ranking, read afresh each update.</param>
 	/// <param name="getCurrentTimeMs">The clock the switch gate measures its holds by.</param>
+	/// <param name="gameHasTheMusic">Whether the game is playing a track of its own by script; read each update.</param>
 	public MusicCurator(
 		ICoreClientAPI clientApi,
 		Func<IList<SituationAssessment>> getAssessments,
 		Playback playback,
-		Func<long> getCurrentTimeMs)
+		Func<long> getCurrentTimeMs,
+		Func<bool>? gameHasTheMusic = null)
 	{
 		this.clientApi = clientApi;
 		this.getAssessments = getAssessments;
 		this.playback = playback;
+		this.gameHasTheMusic = gameHasTheMusic ?? (() => false);
 		switchGate = new PlaylistSwitchGate(getCurrentTimeMs);
 	}
 
@@ -86,6 +90,15 @@ public class MusicCurator
 
 	private void AutoSelectPlaylist()
 	{
+		// The game's loop starts nothing over its own scripted music, and this loop stands
+		// in for that one. Not left to the ranking: Silence weighs 2 against a storm's 10
+		// and death's 20, and would lose to either.
+		if (gameHasTheMusic())
+		{
+			StandDown();
+			return;
+		}
+
 		var playlist = GetBestPlaylistForCurrentSituation();
 		if (playlist == null)
 		{
@@ -106,6 +119,23 @@ public class MusicCurator
 			Logger.Debug($"Switching to playlist: {playlist.Situation}");
 			playback.Play(playlist);
 		}
+	}
+
+	/// <summary>
+	/// Select Silence, whatever leads. The Silence playlist is a dynamic one with nothing
+	/// in it, so selecting it stops what is sounding and starts nothing; selecting it once
+	/// is enough, and the gate is not asked.
+	/// </summary>
+	private void StandDown()
+	{
+		if (playback.CurrentPlaylist?.Situation == Situation.Silence
+		    || !playlists.TryGetValue(Situation.Silence, out var silence))
+		{
+			return;
+		}
+
+		Logger.Debug("The game is playing a track of its own; standing down");
+		playback.Play(silence);
 	}
 
 	private float WeightedScore(Situation situation)

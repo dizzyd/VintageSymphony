@@ -56,10 +56,16 @@ public enum Situation
 		urgent: true)]
 	Dead,
 	
+	/// <summary>
+	/// The game is playing music of its own, and this engine keeps out of its way. Urgent,
+	/// and averse to nothing: a boss fight's music is the fight music, and holding the
+	/// combat playlist for its minimum play time laid the two over each other for half a
+	/// minute.
+	/// </summary>
 	[SituationData(2.0f,
 		dynamicSituation: true,
 		pauseAfterPlayback: true,
 		smoothIncreasingScore: false,
-		aversions: new[] { Fight })]
+		urgent: true)]
 	Silence,
 }

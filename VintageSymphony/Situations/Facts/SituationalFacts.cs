@@ -23,6 +23,12 @@ public struct SituationalFacts
 	public float RiftDistance = float.PositiveInfinity;
 	public float PlayingResonatorDistance = float.PositiveInfinity;
 	public const int PlayingResonatorDistanceMax = 18;
+
+	/// <summary>
+	/// The game is playing music of its own by script, outside the track list this engine
+	/// took over. See <see cref="SituationalFactsCollector"/> for what counts.
+	/// </summary>
+	public bool ScriptedTrackPlaying;
 	public float SunLevel;
 	public float DayLight;
 	public bool Alive;

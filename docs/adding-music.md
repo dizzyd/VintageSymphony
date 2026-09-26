@@ -212,8 +212,9 @@ A few things worth knowing:
   quickly and keep playing while the situation lasts. The peaceful ones play a
   track, rest a while, and play another.
 - There is also a `silence` situation in the list. It is what the mod uses to
-  stay quiet while a resonator is playing near you. There is no point tagging a
-  track for it.
+  stay quiet while the game is playing music of its own: a resonator, the
+  firepit song, a boss fight, the Devastation area, the music blocks inside the
+  Resonance Archive. There is no point tagging a track for it.
 
 ## How a track gets chosen
 

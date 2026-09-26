@@ -13,6 +13,13 @@ public class SilenceEvaluator : IEvaluator
 
 	public float Evaluate(Situation situation, SituationalFacts facts)
 	{
+		// The curator defers on this fact itself, whatever the ranking says; the score is
+		// so the ranking and the debug overlay tell the same story.
+		if (facts.ScriptedTrackPlaying)
+		{
+			return 1f;
+		}
+
 		const int max = SituationalFacts.PlayingResonatorDistanceMax;
 		return MoreMath.ClampMap(facts.PlayingResonatorDistance, max - (int)(max * 0.25), max, 1, 0);
 	}

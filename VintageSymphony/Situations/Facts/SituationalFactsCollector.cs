@@ -56,6 +56,7 @@ public class SituationalFactsCollector
 	private const int SurroundingsScanIntervalMs = 1000;
 	private readonly long surroundingsScanListenerId;
 	private volatile float playingResonatorDistance = float.PositiveInfinity;
+	private volatile bool scriptedTrackPlaying;
 	private volatile int roomExitCount = -1;
 	private readonly RoomRegistry roomRegistry;
 
@@ -133,6 +134,7 @@ public class SituationalFactsCollector
 		UpdateSunFacts();
 		UpdateAlive();
 		facts.PlayingResonatorDistance = playingResonatorDistance;
+		facts.ScriptedTrackPlaying = scriptedTrackPlaying;
 		facts.RoomExitCount = roomExitCount;
 
 		return facts;
@@ -434,7 +436,22 @@ public class SituationalFactsCollector
 	private void ScanSurroundings(float dt)
 	{
 		ScanForPlayingResonators();
+		CheckForScriptedTrack();
 		LookUpRoom();
+	}
+
+	/// <summary>
+	/// Music the game starts by script - StartTrack at priority 99 from a boss, the
+	/// Devastation area, an archive trigger block, a resonator or a firepit - bypasses the
+	/// track list this engine took over, and lands in the game engine's own current track
+	/// instead. The game's loop refuses to start anything over such a track; this loop
+	/// never runs the game's, so it has to look for itself. A track counts while it is
+	/// loading too, as it does for the game. The game's loop is also what would have
+	/// cleared a finished track from that slot, so activity is what is asked, not presence.
+	/// </summary>
+	private void CheckForScriptedTrack()
+	{
+		scriptedTrackPlaying = clientApi.CurrentMusicTrack?.IsActive ?? false;
 	}
 
 	/// <summary>
